@@ -8,11 +8,13 @@ from core.llm_client import LLMClient, JobScore
 from core.session_logger import (
     ApplicationRecord,
     append_record,
+    append_csv_row,
+    append_error_log,
     is_already_applied,
     get_session_summary,
     load_log,
 )
-from platforms.base_platform import LoginError
+from platforms.base_platform import LoginError, JobDetails
 from platforms.naukri.platform import NaukriPlatform
 from platforms.linkedin.platform import LinkedInPlatform
 from ui import console as ui
@@ -36,6 +38,8 @@ def run_platform(
     threshold: int,
     rate_limiter: RateLimiter,
     log_path: str,
+    csv_path: str,
+    error_log_path: str,
     session_records: list,
     applied_count: list,
 ) -> None:
@@ -69,12 +73,13 @@ def run_platform(
             ui.print_info(f"Already applied: {listing.title} — skipping")
             continue
 
-        # Get full job description
+        # Get full job details (description + structured fields)
+        details = JobDetails(job_description=listing.title)
         try:
-            jd = platform.get_job_description(listing)
+            details = platform.get_job_details(listing)
         except Exception as e:
-            jd = listing.title
-            logging.getLogger(__name__).warning("Could not fetch JD for %s: %s", listing.url, e)
+            logging.getLogger(__name__).warning("Could not fetch job details for %s: %s", listing.url, e)
+        jd = details.job_description
 
         # Skip LLM scoring if CV is empty - apply to all jobs
         if not cv_data.raw_text:
@@ -90,6 +95,25 @@ def run_platform(
                 continue
             ui.print_job_evaluation(idx, total_listings, listing, score, threshold)
 
+        def _make_record(status, error=None, external_url=""):
+            return ApplicationRecord(
+                platform=platform_name,
+                job_title=listing.title,
+                company=listing.company,
+                job_url=listing.url,
+                score=score.score,
+                location=listing.location,
+                experience_required=details.experience_required,
+                job_description=details.job_description,
+                key_skills=details.key_skills,
+                about_company=details.about_company,
+                external_site_url=external_url or "",
+                matched_skills=score.matched_skills,
+                missing_skills=score.missing_skills,
+                status=status,
+                error_message=error,
+            )
+
         # Decide
         if score.score >= threshold or not cv_data.raw_text:
             try:
@@ -98,18 +122,10 @@ def run_platform(
                 ui.print_apply_result(listing, result)
                 rate_limiter.wait_after_apply()
 
-                record = ApplicationRecord(
-                    platform=platform_name,
-                    job_title=listing.title,
-                    company=listing.company,
-                    job_url=listing.url,
-                    score=score.score,
-                    matched_skills=score.matched_skills,
-                    missing_skills=score.missing_skills,
-                    status=result.status,
-                    error_message=result.error,
-                )
+                record = _make_record(result.status, result.error, result.external_url or "")
                 append_record(log_path, record)
+                append_csv_row(csv_path, record)
+                append_error_log(error_log_path, record)
                 session_records.append(record)
 
                 if result.status == "applied":
@@ -119,31 +135,15 @@ def run_platform(
                 ui.print_error(str(e))
                 break
             except Exception as e:
-                record = ApplicationRecord(
-                    platform=platform_name,
-                    job_title=listing.title,
-                    company=listing.company,
-                    job_url=listing.url,
-                    score=score.score,
-                    matched_skills=score.matched_skills,
-                    missing_skills=score.missing_skills,
-                    status="error",
-                    error_message=str(e),
-                )
+                record = _make_record("error", str(e))
                 append_record(log_path, record)
+                append_csv_row(csv_path, record)
+                append_error_log(error_log_path, record)
                 session_records.append(record)
         else:
-            record = ApplicationRecord(
-                platform=platform_name,
-                job_title=listing.title,
-                company=listing.company,
-                job_url=listing.url,
-                score=score.score,
-                matched_skills=score.matched_skills,
-                missing_skills=score.missing_skills,
-                status="skipped",
-            )
+            record = _make_record("skipped")
             append_record(log_path, record)
+            append_csv_row(csv_path, record)
             session_records.append(record)
             rate_limiter.wait()
 
@@ -227,6 +227,13 @@ def main() -> None:
     session_records: list[ApplicationRecord] = []
     applied_count = [0]  # mutable counter passed by reference
 
+    from pathlib import Path as _Path
+    _log_dir = _Path(config.log_path).parent
+    csv_path = str(_log_dir / "applications_report.csv")
+    error_log_path = str(_log_dir / "errors_report.csv")
+    ui.console.print(f"[dim]Reports → {csv_path}[/dim]")
+    ui.console.print(f"[dim]Error log → {error_log_path}[/dim]")
+
     # Determine which platforms to run
     platforms_to_run = []
     if platform_choice in ("naukri", "both"):
@@ -250,6 +257,8 @@ def main() -> None:
             threshold=threshold,
             rate_limiter=rate_limiter,
             log_path=config.log_path,
+            csv_path=csv_path,
+            error_log_path=error_log_path,
             session_records=session_records,
             applied_count=applied_count,
         )
@@ -258,6 +267,8 @@ def main() -> None:
         ui.print_target_reached(job_target)
 
     ui.print_final_summary(session_records, config.log_path)
+    ui.console.print(f"\n[bold]CSV report:[/bold] {csv_path}")
+    ui.console.print(f"[bold]Error log:[/bold]  {error_log_path}")
 
 
 if __name__ == "__main__":

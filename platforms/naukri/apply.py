@@ -33,9 +33,10 @@ def apply_to_job(driver, listing: JobListing, rate_limiter: RateLimiter) -> Appl
 
     # Skip external ATS redirects
     try:
-        driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_REDIRECT)
+        ext_el = driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_REDIRECT)
+        external_url = ext_el.get_attribute("href") or ""
         logger.info("Skipping external apply: %s", listing.title)
-        return ApplicationResult(success=False, status="skipped_external", error="external_apply")
+        return ApplicationResult(success=False, status="skipped_external", error="external_apply", external_url=external_url)
     except NoSuchElementException:
         pass
 

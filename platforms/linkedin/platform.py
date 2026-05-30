@@ -1,4 +1,4 @@
-from platforms.base_platform import BasePlatform, JobListing, ApplicationResult
+from platforms.base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult
 from platforms.linkedin import login, search, job_scraper, apply
 
 
@@ -14,6 +14,9 @@ class LinkedInPlatform(BasePlatform):
 
     def get_job_description(self, listing: JobListing) -> str:
         return job_scraper.get_job_description(self.driver, listing, self.rate_limiter)
+
+    def get_job_details(self, listing: JobListing) -> JobDetails:
+        return job_scraper.get_job_details(self.driver, listing, self.rate_limiter)
 
     def apply_to_job(self, listing: JobListing, cv_data=None) -> ApplicationResult:
         return apply.apply_to_job(self.driver, listing, self.rate_limiter, cv_data)

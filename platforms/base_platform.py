@@ -17,10 +17,19 @@ class JobListing:
 
 
 @dataclass
+class JobDetails:
+    job_description: str
+    key_skills: list = field(default_factory=list)
+    experience_required: str = ""
+    about_company: str = ""
+
+
+@dataclass
 class ApplicationResult:
     success: bool
     status: str = "applied"
     error: str = None
+    external_url: str = None
 
 
 class BasePlatform(ABC):
@@ -44,6 +53,9 @@ class BasePlatform(ABC):
     @abstractmethod
     def get_job_description(self, listing: JobListing) -> str:
         pass
+
+    def get_job_details(self, listing: JobListing) -> JobDetails:
+        return JobDetails(job_description=self.get_job_description(listing))
 
     @abstractmethod
     def apply_to_job(self, listing: JobListing) -> ApplicationResult:
