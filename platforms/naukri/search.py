@@ -11,11 +11,10 @@ from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-SEL_JOB_CARD = "article.jobTuple, div.job-card, div[class*='job-list'], div[class*='srp-jobtuple']"
-SEL_TITLE = "a.title, a[class*='jobTitle'], h2[class*='title'], a[class*='title']"
-SEL_COMPANY = "a.subTitle, span[class*='companyInfo'], div[class*='company'], a[class*='company']"
-SEL_LOCATION = "li.location span, span[class*='location'], div[class*='location'], span[class*='loc']"
-SEL_JOB_URL = "a.title, a[class*='jobTitle'], h2[class*='title'] a, a[class*='title']"
+SEL_JOB_CARD  = "article.jobTuple, div[class*='srp-jobtuple'], div[class*='job-tuple'], div[class*='jobTuple']"
+SEL_TITLE     = "a[class*='title'], a[class*='jobTitle'], h2[class*='title'] a"
+SEL_COMPANY   = "a[class*='comp-name'], span[class*='comp-name'], a[class*='company-name'], span[class*='company-name'], a.subTitle"
+SEL_LOCATION  = "span[class*='locWdth'], span[class*='location'], li[class*='location'] span, span[class*='loc']"
 SEL_NEXT_PAGE = "a[class*='next'], button[aria-label='Next']"
 
 
@@ -81,7 +80,7 @@ def search_jobs(
 
         # Try to find job cards with multiple selectors
         cards = []
-        for selector in [SEL_JOB_CARD, "div.job-card", "article.jobTuple", "div[class*='job']"]:
+        for selector in [SEL_JOB_CARD, "article.jobTuple", "div[class*='job-tuple']", "div[class*='jobTuple']"]:
             try:
                 cards = driver.find_elements(By.CSS_SELECTOR, selector)
                 if cards:

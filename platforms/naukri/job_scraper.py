@@ -10,11 +10,33 @@ from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-SEL_JOB_DESC = "div.job-desc, div[class*='job-desc'], div[id='job-description-wrapper'], div.jd-container, div[class*='jd-desc'], section[class*='job-desc']"
-SEL_SKILLS_TAG = "a.chip, a[class*='chip'], span[class*='skill'], div[class*='skill']"
-SEL_SHOW_MORE = "a[class*='show-more'], button[class*='show-more'], button[class*='expand']"
-SEL_EXPERIENCE = "span[class*='exp'], div[class*='exp-wrap'] span, div.exp span, li[class*='expwanted'] span"
-SEL_ABOUT_COMPANY = "div.comp-info-detail, div[class*='company-overview'], div[class*='about-company'], section[class*='company-info']"
+# Selectors derived from actual Naukri JD page HTML
+SEL_COMPANY_NAME   = "div[class*='jd-header-comp-name'] a"
+SEL_COMPANY_LOGO   = "img[class*='jhc__comp-banner']"
+SEL_EXPERIENCE     = "div[class*='jhc__exp'] span"
+SEL_SALARY         = "div[class*='jhc__salary'] span"
+SEL_JOB_HIGHLIGHTS = "ul[class*='job-highlight-list'] li"
+SEL_JOB_DESC       = "div[class*='JDC__dang-inner-html'], section[class*='job-desc-container']"
+SEL_KEY_SKILLS     = "div[class*='key-skill'] a span, div[class*='key-skill'] a"
+SEL_STATS          = "div[class*='jd-stats'] span[class*='stat']"
+SEL_ABOUT_COMPANY  = "div[class*='comp-info-detail'], div[class*='about-company'], section[class*='company-info']"
+SEL_EXTERNAL_BTN   = "button#company-site-button, button[class*='company-site-button']"
+
+
+def _get_text(driver, selector: str, default: str = "") -> str:
+    try:
+        el = driver.find_element(By.CSS_SELECTOR, selector)
+        return el.text.strip() or default
+    except NoSuchElementException:
+        return default
+
+
+def _get_attr(driver, selector: str, attr: str, default: str = "") -> str:
+    try:
+        el = driver.find_element(By.CSS_SELECTOR, selector)
+        return el.get_attribute(attr) or default
+    except NoSuchElementException:
+        return default
 
 
 def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> JobDetails:
@@ -28,95 +50,91 @@ def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> J
     except TimeoutException:
         pass
 
-    # Extract job description
-    desc_el = None
-    for selector in SEL_JOB_DESC.split(", "):
-        try:
-            desc_el = WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-            )
-            logger.info("Found job description using selector: %s", selector)
-            break
-        except TimeoutException:
-            continue
-
-    if not desc_el:
+    # Wait for the main job description to appear before scraping anything
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, SEL_JOB_DESC))
+        )
+    except TimeoutException:
         logger.warning("Job description not found for: %s", listing.url)
 
-    # Click show more if present
+    # Company name (JD page is more reliable than search card)
+    company_name = _get_text(driver, SEL_COMPANY_NAME, listing.company)
+
+    # Company logo
+    company_logo_url = _get_attr(driver, SEL_COMPANY_LOGO, "src")
+
+    # Experience and salary
+    experience_required = _get_text(driver, SEL_EXPERIENCE)
+    salary = _get_text(driver, SEL_SALARY)
+
+    # Job highlights (bullet list at top of JD)
+    job_highlights = []
     try:
-        for selector in SEL_SHOW_MORE.split(", "):
-            try:
-                show_more = driver.find_element(By.CSS_SELECTOR, selector)
-                driver.execute_script("arguments[0].click();", show_more)
-                rate_limiter.wait()
-                for desc_selector in SEL_JOB_DESC.split(", "):
-                    try:
-                        desc_el = driver.find_element(By.CSS_SELECTOR, desc_selector)
-                        break
-                    except NoSuchElementException:
-                        continue
-                break
-            except NoSuchElementException:
-                continue
+        highlight_els = driver.find_elements(By.CSS_SELECTOR, SEL_JOB_HIGHLIGHTS)
+        job_highlights = [el.text.strip() for el in highlight_els if el.text.strip()]
     except Exception:
         pass
 
-    description = desc_el.text.strip() if desc_el else (listing.raw_snippet or listing.title)
+    # Full job description text
+    description = listing.raw_snippet or listing.title
+    try:
+        desc_el = driver.find_element(By.CSS_SELECTOR, SEL_JOB_DESC)
+        text = desc_el.text.strip()
+        if text:
+            description = text
+    except NoSuchElementException:
+        pass
 
-    # Extract key skills
+    # Key skills from the dedicated skills section
     key_skills = []
     try:
-        for selector in SEL_SKILLS_TAG.split(", "):
-            try:
-                skill_tags = driver.find_elements(By.CSS_SELECTOR, selector)
-                if skill_tags:
-                    key_skills = [t.text.strip() for t in skill_tags if t.text.strip()]
-                    break
-            except Exception:
-                continue
+        skill_els = driver.find_elements(By.CSS_SELECTOR, SEL_KEY_SKILLS)
+        key_skills = [el.text.strip() for el in skill_els if el.text.strip()]
     except Exception:
         pass
 
     # Append skills to description so LLM has richer context
     if key_skills:
-        description += f"\n\nRequired Skills: {', '.join(key_skills)}"
+        description += f"\n\nKey Skills: {', '.join(key_skills)}"
 
-    # Extract experience required
-    experience_required = ""
+    # Stats: Posted date, openings, applicants
+    posted_date = ""
+    openings = ""
+    applicants_count = ""
     try:
-        for selector in SEL_EXPERIENCE.split(", "):
+        stat_els = driver.find_elements(By.CSS_SELECTOR, SEL_STATS)
+        for stat in stat_els:
             try:
-                exp_el = driver.find_element(By.CSS_SELECTOR, selector)
-                text = exp_el.text.strip()
-                if text:
-                    experience_required = text
-                    break
-            except NoSuchElementException:
+                label = stat.find_element(By.CSS_SELECTOR, "label").text.strip().lower()
+                spans = stat.find_elements(By.CSS_SELECTOR, "span")
+                value = spans[-1].text.strip() if spans else ""
+                if "posted" in label:
+                    posted_date = value
+                elif "opening" in label:
+                    openings = value
+                elif "applicant" in label:
+                    applicants_count = value
+            except Exception:
                 continue
     except Exception:
         pass
 
-    # Extract about company
-    about_company = ""
-    try:
-        for selector in SEL_ABOUT_COMPANY.split(", "):
-            try:
-                comp_el = driver.find_element(By.CSS_SELECTOR, selector)
-                text = comp_el.text.strip()
-                if text and len(text) > 20:
-                    about_company = text
-                    break
-            except NoSuchElementException:
-                continue
-    except Exception:
-        pass
+    # About company (optional section, not always present)
+    about_company = _get_text(driver, SEL_ABOUT_COMPANY)
 
     return JobDetails(
-        job_description=description or listing.title,
+        job_description=description,
         key_skills=key_skills,
+        job_highlights=job_highlights,
         experience_required=experience_required,
+        salary=salary,
         about_company=about_company,
+        posted_date=posted_date,
+        applicants_count=applicants_count,
+        openings=openings,
+        company_logo_url=company_logo_url,
+        company_name=company_name,
     )
 
 

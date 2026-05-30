@@ -10,13 +10,34 @@ from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-SEL_APPLY_BTN = "button[id='apply-button'], a[id='apply-button']"
-SEL_APPLY_BTN_ALT = "button[class*='apply'], a[class*='apply-button']"
-SEL_ALREADY_APPLIED = "button[class*='already-applied'], span[class*='already-applied']"
-SEL_APPLIED_SUCCESS = "div.apply-success, div[class*='applied'], span[class*='applied']"
-SEL_EXTERNAL_REDIRECT = "div[class*='external-apply'], a[class*='apply-on-company-site']"
-SEL_CHAT_APPLY = "button[class*='chat-apply']"
-SEL_CONFIRM_BTN = "button.btn-primary, button[class*='confirm']"
+# Regular Naukri apply button
+SEL_APPLY_BTN        = "button[id='apply-button'], a[id='apply-button']"
+SEL_APPLY_BTN_ALT    = "button[class*='apply-button'], a[class*='apply-button']"
+# "Apply on company site" external button (from actual HTML)
+SEL_EXTERNAL_BTN     = "button#company-site-button, button[class*='company-site-button']"
+SEL_ALREADY_APPLIED  = "button[class*='already-applied'], span[class*='already-applied']"
+SEL_APPLIED_SUCCESS  = "div[class*='apply-success'], div[class*='applied-banner'], span[class*='applied-message']"
+SEL_CONFIRM_BTN      = "button.btn-primary, button[class*='confirm']"
+
+
+def _capture_external_url(driver, rate_limiter: RateLimiter) -> str:
+    """Click the external apply button, grab the new-tab URL, then close it."""
+    original_handles = set(driver.window_handles)
+    try:
+        btn = driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_BTN)
+        driver.execute_script("arguments[0].click();", btn)
+        rate_limiter.wait_page_load()
+        new_handles = set(driver.window_handles) - original_handles
+        if new_handles:
+            new_tab = new_handles.pop()
+            driver.switch_to.window(new_tab)
+            url = driver.current_url
+            driver.close()
+            driver.switch_to.window(list(original_handles)[0])
+            return url
+    except Exception as e:
+        logger.debug("Could not capture external URL: %s", e)
+    return ""
 
 
 def apply_to_job(driver, listing: JobListing, rate_limiter: RateLimiter) -> ApplicationResult:
@@ -31,32 +52,31 @@ def apply_to_job(driver, listing: JobListing, rate_limiter: RateLimiter) -> Appl
     except NoSuchElementException:
         pass
 
-    # Skip external ATS redirects
+    # Detect "Apply on company site" button → external ATS
     try:
-        ext_el = driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_REDIRECT)
-        external_url = ext_el.get_attribute("href") or ""
-        logger.info("Skipping external apply: %s", listing.title)
-        return ApplicationResult(success=False, status="skipped_external", error="external_apply", external_url=external_url)
+        driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_BTN)
+        logger.info("External apply detected: %s", listing.title)
+        external_url = _capture_external_url(driver, rate_limiter)
+        return ApplicationResult(
+            success=False,
+            status="skipped_external",
+            error="external_apply",
+            external_url=external_url,
+        )
     except NoSuchElementException:
         pass
 
-    # Skip Chat Apply
-    try:
-        driver.find_element(By.CSS_SELECTOR, SEL_CHAT_APPLY)
-        has_chat = True
-    except NoSuchElementException:
-        has_chat = False
-
-    # Find the apply button
+    # Find the regular apply button
     apply_btn = None
     for sel in [SEL_APPLY_BTN, SEL_APPLY_BTN_ALT]:
         try:
-            apply_btn = WebDriverWait(driver, 5).until(
+            candidate = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
             )
-            btn_text = apply_btn.text.lower()
-            if "chat" in btn_text:
+            btn_text = candidate.text.lower()
+            if "company site" in btn_text or "external" in btn_text:
                 continue
+            apply_btn = candidate
             break
         except TimeoutException:
             continue
@@ -86,7 +106,6 @@ def apply_to_job(driver, listing: JobListing, rate_limiter: RateLimiter) -> Appl
             logger.info("Applied successfully: %s @ %s", listing.title, listing.company)
             return ApplicationResult(success=True, status="applied")
         except TimeoutException:
-            # Accept as success if no error is shown
             logger.info("Applied (no success indicator): %s @ %s", listing.title, listing.company)
             return ApplicationResult(success=True, status="applied")
 

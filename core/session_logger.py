@@ -14,9 +14,15 @@ class ApplicationRecord:
     score: int
     location: str = ""
     experience_required: str = ""
+    salary: str = ""
     job_description: str = ""
+    job_highlights: list = field(default_factory=list)
     key_skills: list = field(default_factory=list)
     about_company: str = ""
+    posted_date: str = ""
+    applicants_count: str = ""
+    openings: str = ""
+    company_logo_url: str = ""
     external_site_url: str = ""
     matched_skills: list = field(default_factory=list)
     missing_skills: list = field(default_factory=list)
@@ -29,12 +35,18 @@ _CSV_COLUMNS = [
     "timestamp",
     "platform",
     "company",
+    "company_logo_url",
     "job_title",
     "location",
     "experience_required",
+    "salary",
     "confidence",
     "job_status",
+    "posted_date",
+    "openings",
+    "applicants_count",
     "key_skills",
+    "job_highlights",
     "matched_skills",
     "missing_skills",
     "external_site_url",
@@ -58,12 +70,18 @@ def _record_to_csv_row(record: ApplicationRecord) -> dict:
         "timestamp": record.timestamp,
         "platform": record.platform,
         "company": record.company,
+        "company_logo_url": record.company_logo_url or "",
         "job_title": record.job_title,
         "location": record.location or "",
         "experience_required": record.experience_required or "",
+        "salary": record.salary or "",
         "confidence": record.score,
         "job_status": record.status,
+        "posted_date": record.posted_date or "",
+        "openings": record.openings or "",
+        "applicants_count": record.applicants_count or "",
         "key_skills": ", ".join(record.key_skills) if record.key_skills else "",
+        "job_highlights": " | ".join(record.job_highlights) if record.job_highlights else "",
         "matched_skills": ", ".join(record.matched_skills) if record.matched_skills else "",
         "missing_skills": ", ".join(record.missing_skills) if record.missing_skills else "",
         "external_site_url": record.external_site_url or "",
