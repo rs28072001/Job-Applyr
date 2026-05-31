@@ -34,6 +34,24 @@ Respond ONLY with valid JSON, no extra text:
   "recommendation": "apply" or "skip"
 }"""
 
+# Used when no CV is loaded — LLM extracts skills from the JD directly
+RUBRIC_NO_CV = """You are a job description analyser for a {role} candidate.
+
+Given a job description, identify:
+- matched_skills: core / standard skills listed in the JD that a typical {role} would already have
+- missing_skills: specialised, niche, or advanced requirements that go beyond the standard {role} skill set
+- score (0-100): how well this role fits a typical {role} (100 = perfect fit, 0 = completely unrelated)
+- rationale: 1-2 sentence summary
+
+Respond ONLY with valid JSON, no extra text:
+{{
+  "score": <integer 0-100>,
+  "rationale": "<1-2 sentence explanation>",
+  "matched_skills": ["skill1", "skill2"],
+  "missing_skills": ["skill3"],
+  "recommendation": "apply" or "skip"
+}}"""
+
 
 class LLMClient:
     def __init__(
@@ -48,11 +66,17 @@ class LLMClient:
             api_key=azure_api_key,
         )
         self._model = azure_deployment_name
-        self._cv_data = cv_data
-        # System prompt includes rubric + full CV; sent with every request
-        self._system_prompt = (
-            f"{SCORING_RUBRIC}\n\nCANDIDATE CV:\n\n{cv_data.raw_text[:12000]}"
-        )
+        self._has_cv = bool(cv_data.raw_text)
+
+        if self._has_cv:
+            # System prompt embeds full CV; sent with every request
+            self._system_prompt = (
+                f"{SCORING_RUBRIC}\n\nCANDIDATE CV:\n\n{cv_data.raw_text[:12000]}"
+            )
+        else:
+            # No CV — analyse the JD against the target role title
+            role = (cv_data.job_titles[0] if cv_data.job_titles else "Software Engineer")
+            self._system_prompt = RUBRIC_NO_CV.format(role=role)
 
     def score_job(self, job_description: str, retries: int = 3) -> JobScore:
         for attempt in range(retries):

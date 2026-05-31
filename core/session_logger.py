@@ -16,7 +16,6 @@ class ApplicationRecord:
     experience_required: str = ""
     salary: str = ""
     job_description: str = ""
-    job_highlights: list = field(default_factory=list)
     key_skills: list = field(default_factory=list)
     about_company: str = ""
     posted_date: str = ""
@@ -46,7 +45,6 @@ _CSV_COLUMNS = [
     "openings",
     "applicants_count",
     "key_skills",
-    "job_highlights",
     "matched_skills",
     "missing_skills",
     "external_site_url",
@@ -81,7 +79,6 @@ def _record_to_csv_row(record: ApplicationRecord) -> dict:
         "openings": record.openings or "",
         "applicants_count": record.applicants_count or "",
         "key_skills": ", ".join(record.key_skills) if record.key_skills else "",
-        "job_highlights": " | ".join(record.job_highlights) if record.job_highlights else "",
         "matched_skills": ", ".join(record.matched_skills) if record.matched_skills else "",
         "missing_skills": ", ".join(record.missing_skills) if record.missing_skills else "",
         "external_site_url": record.external_site_url or "",

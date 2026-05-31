@@ -81,18 +81,24 @@ def run_platform(
             logging.getLogger(__name__).warning("Could not fetch job details for %s: %s", listing.url, e)
         jd = details.job_description
 
-        # Skip LLM scoring if CV is empty - apply to all jobs
+        # Always call LLM — with CV it scores fit; without CV it extracts skills from JD
+        try:
+            score = llm.score_job(jd)
+        except Exception as e:
+            ui.print_error(f"LLM scoring failed for {listing.title}: {e}")
+            score = JobScore(score=100, rationale="LLM error - auto-apply", matched_skills=[], missing_skills=[], recommendation="apply")
+
         if not cv_data.raw_text:
-            ui.print_info(f"[{idx}/{total_listings}] {listing.title} @ {listing.company}")
-            ui.console.print("[dim]CV not parsed - applying to all jobs[/dim]")
-            score = JobScore(score=100, rationale="CV not parsed - auto-apply", matched_skills=[], missing_skills=[], recommendation="apply")
+            # No CV: force apply to all jobs but keep matched/missing skills from LLM
+            score = JobScore(
+                score=100,
+                rationale=score.rationale,
+                matched_skills=score.matched_skills,
+                missing_skills=score.missing_skills,
+                recommendation="apply",
+            )
+            ui.print_info(f"[{idx}/{total_listings}] {listing.title} @ {listing.company} — auto-apply (no CV)")
         else:
-            # Score with LLM
-            try:
-                score = llm.score_job(jd)
-            except Exception as e:
-                ui.print_error(f"LLM scoring failed for {listing.title}: {e}")
-                continue
             ui.print_job_evaluation(idx, total_listings, listing, score, threshold)
 
         def _make_record(status, error=None, external_url=""):
@@ -106,7 +112,6 @@ def run_platform(
                 experience_required=details.experience_required,
                 salary=details.salary,
                 job_description=details.job_description,
-                job_highlights=details.job_highlights,
                 key_skills=details.key_skills,
                 about_company=details.about_company,
                 posted_date=details.posted_date,

@@ -20,7 +20,6 @@ class JobListing:
 class JobDetails:
     job_description: str
     key_skills: list = field(default_factory=list)
-    job_highlights: list = field(default_factory=list)
     experience_required: str = ""
     salary: str = ""
     about_company: str = ""

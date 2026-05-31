@@ -15,7 +15,6 @@ SEL_COMPANY_NAME   = "div[class*='jd-header-comp-name'] a"
 SEL_COMPANY_LOGO   = "img[class*='jhc__comp-banner']"
 SEL_EXPERIENCE     = "div[class*='jhc__exp'] span"
 SEL_SALARY         = "div[class*='jhc__salary'] span"
-SEL_JOB_HIGHLIGHTS = "ul[class*='job-highlight-list'] li"
 SEL_JOB_DESC       = "div[class*='JDC__dang-inner-html'], section[class*='job-desc-container']"
 SEL_KEY_SKILLS     = "div[class*='key-skill'] a span, div[class*='key-skill'] a"
 SEL_STATS          = "div[class*='jd-stats'] span[class*='stat']"
@@ -60,14 +59,6 @@ def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> J
     # Experience and salary
     experience_required = _get_text(driver, SEL_EXPERIENCE)
     salary = _get_text(driver, SEL_SALARY)
-
-    # Job highlights (bullet list at top of JD)
-    job_highlights = []
-    try:
-        highlight_els = driver.find_elements(By.CSS_SELECTOR, SEL_JOB_HIGHLIGHTS)
-        job_highlights = [el.text.strip() for el in highlight_els if el.text.strip()]
-    except Exception:
-        pass
 
     # Full job description text
     description = listing.raw_snippet or listing.title
@@ -119,7 +110,6 @@ def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> J
     return JobDetails(
         job_description=description,
         key_skills=key_skills,
-        job_highlights=job_highlights,
         experience_required=experience_required,
         salary=salary,
         about_company=about_company,
