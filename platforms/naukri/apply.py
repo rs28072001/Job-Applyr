@@ -34,28 +34,65 @@ SEL_CHAT_CLOSE      = "div[class*='crossIcon'], div[class*='closeIcon']"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _capture_external_url(driver, rate_limiter: RateLimiter) -> str:
-    """Click the 'Apply on company site' button, capture the new-tab URL, close it."""
-    original_handles = set(driver.window_handles)
+    """
+    Capture the external ATS URL from the 'Apply on company site' button.
+    Strategy:
+      1. Try to read URL from button attributes (href / data-href / onclick) — no click needed.
+      2. Fall back to a real Selenium click (trusted gesture → browser allows window.open),
+         then capture the new-tab URL and close it.
+    """
     try:
         btn = driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_BTN)
-        driver.execute_script("arguments[0].click();", btn)
 
-        # Poll up to 5 s for a new tab to open
-        for _ in range(10):
+        # ── Strategy 1: extract URL from attributes without clicking ─────────
+        attr_url = driver.execute_script("""
+            const btn = arguments[0];
+            // direct href
+            if (btn.href && btn.href !== window.location.href) return btn.href;
+            if (btn.getAttribute('href') && btn.getAttribute('href') !== '#') return btn.getAttribute('href');
+            // data attributes
+            for (const attr of ['data-href', 'data-url', 'data-link', 'data-redirect']) {
+                const v = btn.getAttribute(attr);
+                if (v && v.startsWith('http')) return v;
+            }
+            // onclick / action
+            const oc = btn.getAttribute('onclick') || '';
+            const m = oc.match(/(?:window\\.open|location\\.href)[^'\"]*['\"](https?[^'\"]+)['\\"]/);
+            if (m) return m[1];
+            // walk up to nearest anchor
+            let el = btn;
+            for (let i = 0; i < 4; i++) {
+                if (el.tagName === 'A' && el.href) return el.href;
+                if (!el.parentElement) break;
+                el = el.parentElement;
+            }
+            return '';
+        """, btn)
+
+        if attr_url and attr_url.startswith("http"):
+            logger.debug("External URL from attributes: %s", attr_url)
+            return attr_url
+
+        # ── Strategy 2: real click → new tab ─────────────────────────────────
+        original_handles = set(driver.window_handles)
+        btn.click()  # real WebDriver click = trusted gesture → allows window.open()
+
+        # Poll up to 6 s for a new tab
+        for _ in range(12):
             time.sleep(0.5)
             if set(driver.window_handles) - original_handles:
                 break
 
         new_handles = set(driver.window_handles) - original_handles
         if not new_handles:
-            logger.debug("No new tab opened after clicking external button")
+            logger.debug("No new tab opened after real click on external button")
             return ""
 
         new_tab = new_handles.pop()
         driver.switch_to.window(new_tab)
 
         # Wait for the URL to resolve past about:blank
-        for _ in range(10):
+        for _ in range(12):
             url = driver.current_url
             if url and url not in ("about:blank", ""):
                 break
@@ -64,7 +101,8 @@ def _capture_external_url(driver, rate_limiter: RateLimiter) -> str:
         url = driver.current_url
         driver.close()
         driver.switch_to.window(list(original_handles)[0])
-        return url if url != "about:blank" else ""
+        return url if url not in ("about:blank", "") else ""
+
     except Exception as e:
         logger.debug("Could not capture external URL: %s", e)
         return ""

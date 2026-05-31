@@ -18,7 +18,7 @@ SEL_SALARY         = "div[class*='jhc__salary'] span"
 SEL_JOB_DESC       = "div[class*='JDC__dang-inner-html'], section[class*='job-desc-container']"
 SEL_KEY_SKILLS     = "div[class*='key-skill'] a span, div[class*='key-skill'] a"
 SEL_STATS          = "div[class*='jd-stats'] span[class*='stat']"
-SEL_ABOUT_COMPANY  = "div[class*='comp-info-detail'], div[class*='about-company'], section[class*='company-info']"
+SEL_ABOUT_COMPANY  = "div[class*='comp-info-detail'], div[class*='about-company'], section[class*='company-info'], div[class*='aboutCompany'], div[class*='about_company']"
 SEL_EXTERNAL_BTN   = "button#company-site-button, button[class*='company-site-button']"
 
 
@@ -87,25 +87,61 @@ def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> J
     openings = ""
     applicants_count = ""
     try:
-        stat_els = driver.find_elements(By.CSS_SELECTOR, SEL_STATS)
-        for stat in stat_els:
-            try:
-                label = stat.find_element(By.CSS_SELECTOR, "label").text.strip().lower()
-                spans = stat.find_elements(By.CSS_SELECTOR, "span")
-                value = spans[-1].text.strip() if spans else ""
-                if "posted" in label:
-                    posted_date = value
-                elif "opening" in label:
-                    openings = value
-                elif "applicant" in label:
-                    applicants_count = value
-            except Exception:
-                continue
+        stats_data = driver.execute_script("""
+            const result = {posted_date: '', openings: '', applicants_count: ''};
+            // Try structured stat items first
+            const stats = document.querySelectorAll('div[class*="jd-stats"] span[class*="stat"], div[class*="jd-stats"] li, div[class*="stats"] span');
+            for (const s of stats) {
+                const text = s.innerText.toLowerCase();
+                const label = (s.querySelector('label,span[class*="label"]') || {innerText:''}).innerText.toLowerCase();
+                const key = label || text;
+                // find the "value" — last span child or direct text
+                const valueEl = s.querySelectorAll('span');
+                const value = valueEl.length ? valueEl[valueEl.length-1].innerText.trim() : s.innerText.trim();
+                if (key.includes('posted') || key.includes('post')) result.posted_date = result.posted_date || value;
+                if (key.includes('opening')) result.openings = result.openings || value;
+                if (key.includes('applicant')) result.applicants_count = result.applicants_count || value;
+            }
+            // Fallback: scan all text on page for patterns
+            if (!result.posted_date || !result.openings || !result.applicants_count) {
+                const allText = document.body.innerText;
+                const posted = allText.match(/Posted[:\\s]+(\\d+[^\\n]{0,20}ago|\\d{1,2}[\\/ ]\\w+[\\/ ]\\d{2,4})/i);
+                if (posted && !result.posted_date) result.posted_date = posted[1].trim();
+                const openings_m = allText.match(/(\\d+)\\s+Opening/i);
+                if (openings_m && !result.openings) result.openings = openings_m[1];
+                const applicants_m = allText.match(/(\\d+[\\+k]?)\\s+Applicant/i);
+                if (applicants_m && !result.applicants_count) result.applicants_count = applicants_m[1];
+            }
+            return result;
+        """)
+        if stats_data:
+            posted_date = stats_data.get("posted_date", "")
+            openings = stats_data.get("openings", "")
+            applicants_count = stats_data.get("applicants_count", "")
     except Exception:
         pass
 
-    # About company (optional section, not always present)
+    # About company — try CSS selectors first, then JS heading-search fallback
     about_company = _get_text(driver, SEL_ABOUT_COMPANY)
+    if not about_company:
+        try:
+            about_company = driver.execute_script("""
+                // Walk all headings looking for "about company" / "about us"
+                const headings = document.querySelectorAll('h1,h2,h3,h4,span[class*="heading"],div[class*="heading"]');
+                for (const h of headings) {
+                    const txt = h.innerText.toLowerCase();
+                    if (txt.includes('about company') || txt.includes('about us') || txt.includes('about the company')) {
+                        // grab the next sibling container or parent's text
+                        const parent = h.closest('section, div[class*="section"], div[class*="comp"]') || h.parentElement;
+                        if (parent) return parent.innerText.trim().slice(0, 1000);
+                    }
+                }
+                // Fallback: any element whose class contains "about"
+                const el = document.querySelector('[class*="about"]');
+                return el ? el.innerText.trim().slice(0, 1000) : '';
+            """) or ""
+        except Exception:
+            pass
 
     return JobDetails(
         job_description=description,

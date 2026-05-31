@@ -127,6 +127,7 @@ class LLMClient:
             return "Yes"
 
     def score_job(self, job_description: str, retries: int = 3) -> JobScore:
+        last_error = ""
         for attempt in range(retries):
             try:
                 response = self._client.chat.completions.create(
@@ -144,16 +145,18 @@ class LLMClient:
                     ],
                 )
                 return self._parse_score(response.choices[0].message.content)
-            except RateLimitError:
-                if attempt == retries - 1:
-                    raise
+            except RateLimitError as e:
+                last_error = f"RateLimitError: {e}"
+                logging.getLogger(__name__).warning("LLM rate-limited (attempt %d/%d)", attempt + 1, retries)
                 time.sleep(60)
-            except APIError:
-                if attempt == retries - 1:
-                    raise
-                time.sleep(5 * (attempt + 1))
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                logging.getLogger(__name__).warning(
+                    "LLM API error attempt %d/%d: %s", attempt + 1, retries, last_error
+                )
+                time.sleep(3 * (attempt + 1))
 
-        return JobScore(score=0, rationale="Failed to evaluate", recommendation="skip")
+        return JobScore(score=0, rationale=f"LLM unavailable — {last_error[:120]}", recommendation="skip")
 
     def _parse_score(self, text: str) -> JobScore:
         text = text.strip()

@@ -90,6 +90,8 @@ def run_platform(
                 f"matched={len(score.matched_skills)} | "
                 f"missing={len(score.missing_skills)}[/dim]"
             )
+            if score.score == 0:
+                ui.console.print(f"  [yellow]  ↳ {score.rationale}[/yellow]")
         except Exception as e:
             ui.console.print(f"[red] FAILED: {e}[/red]")
             score = JobScore(score=100, rationale="LLM error - auto-apply", matched_skills=[], missing_skills=[], recommendation="apply")
