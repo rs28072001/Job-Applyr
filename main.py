@@ -82,10 +82,16 @@ def run_platform(
         jd = details.job_description
 
         # Always call LLM — with CV it scores fit; without CV it extracts skills from JD
+        ui.console.print(f"  [dim]🤖 LLM analysing job...[/dim]", end="")
         try:
             score = llm.score_job(jd)
+            ui.console.print(
+                f"[dim] score={score.score} | "
+                f"matched={len(score.matched_skills)} | "
+                f"missing={len(score.missing_skills)}[/dim]"
+            )
         except Exception as e:
-            ui.print_error(f"LLM scoring failed for {listing.title}: {e}")
+            ui.console.print(f"[red] FAILED: {e}[/red]")
             score = JobScore(score=100, rationale="LLM error - auto-apply", matched_skills=[], missing_skills=[], recommendation="apply")
 
         if not cv_data.raw_text:
@@ -129,7 +135,7 @@ def run_platform(
         if score.score >= threshold or not cv_data.raw_text:
             try:
                 rate_limiter.record_action()
-                result = platform.apply_to_job(listing, cv_data)
+                result = platform.apply_to_job(listing, cv_data, llm=llm)
                 ui.print_apply_result(listing, result)
 
                 # Only pause after a real apply; skip/external jobs need no cool-down

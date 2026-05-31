@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -35,6 +36,19 @@ Respond ONLY with valid JSON, no extra text:
 }"""
 
 # Used when no CV is loaded — LLM extracts skills from the JD directly
+CHATBOT_ANSWER_PROMPT = """You are helping a {role} candidate answer a Naukri job application chatbot.
+
+Rules (follow strictly):
+- For years-of-experience questions: give a number like "3" or "5" — plain integer, no units
+- For location / relocation questions: always answer "Yes"
+- For Yes/No questions about common {role} skills: answer "Yes"
+- For notice-period questions: "30 days"
+- For salary / CTC questions: "As per industry standards"
+- For any other open-text question: one concise professional sentence
+
+If choices are provided, respond with ONLY the exact text of the best matching choice.
+If free text, respond with ONLY the answer — no explanation, no quotes, no punctuation."""
+
 RUBRIC_NO_CV = """You are a job description analyser for a {role} candidate.
 
 Given a job description, identify:
@@ -69,14 +83,48 @@ class LLMClient:
         self._has_cv = bool(cv_data.raw_text)
 
         if self._has_cv:
-            # System prompt embeds full CV; sent with every request
             self._system_prompt = (
                 f"{SCORING_RUBRIC}\n\nCANDIDATE CV:\n\n{cv_data.raw_text[:12000]}"
             )
         else:
-            # No CV — analyse the JD against the target role title
             role = (cv_data.job_titles[0] if cv_data.job_titles else "Software Engineer")
             self._system_prompt = RUBRIC_NO_CV.format(role=role)
+
+        self._role = cv_data.job_titles[0] if cv_data.job_titles else "Software Engineer"
+        self._exp_years = str(int(cv_data.experience_years)) if cv_data.experience_years else "3"
+
+    def answer_chatbot_question(self, question: str, choices: list | None = None) -> str:
+        """Use LLM to answer a single Naukri chatbot question during apply."""
+        system = CHATBOT_ANSWER_PROMPT.format(role=self._role, exp_years=self._exp_years)
+        choices_text = ""
+        if choices:
+            choices_text = "\n\nAvailable choices (reply with EXACT text of one):\n" + "\n".join(f"- {c}" for c in choices)
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                max_completion_tokens=60,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": f"Question: {question}{choices_text}"},
+                ],
+            )
+            return resp.choices[0].message.content.strip()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Chatbot LLM answer failed: %s", e)
+            # Sensible fallbacks
+            q = question.lower()
+            if choices:
+                for c in choices:
+                    if c.lower() in ("yes", "y"):
+                        return c
+                return choices[0]
+            if any(w in q for w in ("year", "experience", "how long", "how many")):
+                return self._exp_years
+            if any(w in q for w in ("notice", "notice period")):
+                return "30 days"
+            if any(w in q for w in ("salary", "ctc", "expected", "package")):
+                return "As per industry standards"
+            return "Yes"
 
     def score_job(self, job_description: str, retries: int = 3) -> JobScore:
         for attempt in range(retries):

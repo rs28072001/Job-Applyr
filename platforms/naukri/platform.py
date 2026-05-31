@@ -18,5 +18,5 @@ class NaukriPlatform(BasePlatform):
     def get_job_details(self, listing: JobListing) -> JobDetails:
         return job_scraper.get_job_details(self.driver, listing, self.rate_limiter)
 
-    def apply_to_job(self, listing: JobListing, cv_data=None) -> ApplicationResult:
-        return apply.apply_to_job(self.driver, listing, self.rate_limiter)
+    def apply_to_job(self, listing: JobListing, cv_data=None, llm=None) -> ApplicationResult:
+        return apply.apply_to_job(self.driver, listing, self.rate_limiter, cv_data=cv_data, llm=llm)
