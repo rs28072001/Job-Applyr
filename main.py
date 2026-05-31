@@ -126,16 +126,17 @@ def run_platform(
                 rate_limiter.record_action()
                 result = platform.apply_to_job(listing, cv_data)
                 ui.print_apply_result(listing, result)
-                rate_limiter.wait_after_apply()
+
+                # Only pause after a real apply; skip/external jobs need no cool-down
+                if result.status == "applied":
+                    rate_limiter.wait_after_apply()
+                    applied_count[0] += 1
 
                 record = _make_record(result.status, result.error, result.external_url or "")
                 append_record(log_path, record)
                 append_csv_row(csv_path, record)
                 append_error_log(error_log_path, record)
                 session_records.append(record)
-
-                if result.status == "applied":
-                    applied_count[0] += 1
 
             except RateLimitExceededError as e:
                 ui.print_error(str(e))
@@ -151,7 +152,7 @@ def run_platform(
             append_record(log_path, record)
             append_csv_row(csv_path, record)
             session_records.append(record)
-            rate_limiter.wait()
+            # No wait needed — we only read this page, didn't submit anything
 
 
 def main() -> None:

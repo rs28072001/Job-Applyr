@@ -11,8 +11,8 @@ class RateLimitExceededError(Exception):
 class RateLimiter:
     def __init__(
         self,
-        min_delay: float = 2.0,
-        max_delay: float = 6.0,
+        min_delay: float = 1.0,
+        max_delay: float = 2.5,
         max_per_hour: int = 30,
         max_per_day: int = 150,
     ):
@@ -50,15 +50,15 @@ class RateLimiter:
 
     def wait(self) -> None:
         delay = random.uniform(self.min_delay, self.max_delay)
-        delay += random.gauss(0, 0.5)
-        delay = max(1.0, delay)
+        delay += random.gauss(0, 0.2)
+        delay = max(0.5, delay)
         time.sleep(delay)
 
     def wait_after_apply(self) -> None:
-        time.sleep(random.uniform(8, 20))
+        time.sleep(random.uniform(3, 6))
 
     def wait_page_load(self) -> None:
-        time.sleep(random.uniform(1, 3))
+        time.sleep(random.uniform(0.5, 1.2))
 
     @staticmethod
     def human_type(driver, element, text: str) -> None:

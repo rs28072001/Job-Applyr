@@ -43,16 +43,9 @@ def get_job_details(driver, listing: JobListing, rate_limiter: RateLimiter) -> J
     driver.get(listing.url)
     rate_limiter.wait_page_load()
 
+    # Wait for the main job description — this is the only blocking wait
     try:
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-    except TimeoutException:
-        pass
-
-    # Wait for the main job description to appear before scraping anything
-    try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 6).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, SEL_JOB_DESC))
         )
     except TimeoutException:

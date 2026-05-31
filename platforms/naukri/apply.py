@@ -41,8 +41,10 @@ def _capture_external_url(driver, rate_limiter: RateLimiter) -> str:
 
 
 def apply_to_job(driver, listing: JobListing, rate_limiter: RateLimiter) -> ApplicationResult:
-    driver.get(listing.url)
-    rate_limiter.wait_page_load()
+    # Skip navigation if get_job_details() already loaded this page
+    if driver.current_url.split("?")[0].rstrip("/") != listing.url.rstrip("/"):
+        driver.get(listing.url)
+        rate_limiter.wait_page_load()
 
     # Check if already applied
     try:
