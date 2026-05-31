@@ -65,7 +65,6 @@ Rules:
 
     response = client.chat.completions.create(
         model=model,
-        max_completion_tokens=4096,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"CV TEXT:\n\n{raw_text[:8000]}"},

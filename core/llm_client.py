@@ -102,7 +102,6 @@ class LLMClient:
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,
-                max_completion_tokens=60,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": f"Question: {question}{choices_text}"},
@@ -132,7 +131,6 @@ class LLMClient:
             try:
                 response = self._client.chat.completions.create(
                     model=self._model,
-                    max_completion_tokens=512,
                     messages=[
                         {"role": "system", "content": self._system_prompt},
                         {
