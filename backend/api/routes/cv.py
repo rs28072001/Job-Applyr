@@ -1,0 +1,83 @@
+"""POST /api/cv/parse  ·  GET /api/cv/profile  ·  PUT /api/cv/profile"""
+import asyncio
+import os
+import pathlib
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.orm import Session as DBSession
+
+from api.database import get_db
+from api.models import CVProfile
+from api.schemas import CVProfileRead, CVProfileUpdate
+
+router = APIRouter()
+
+CV_DIR = pathlib.Path(os.getenv("CV_UPLOAD_DIR", "./data/cv"))
+
+
+@router.post("/api/cv/parse", response_model=CVProfileRead)
+async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Depends(get_db)):
+    CV_DIR.mkdir(parents=True, exist_ok=True)
+    dest = CV_DIR / "uploaded_resume.pdf"
+
+    # Save uploaded PDF
+    content = await cv_file.read()
+    dest.write_bytes(content)
+
+    # Load config from DB for LLM credentials
+    from api.models import Config as ConfigModel
+    cfg = db.get(ConfigModel, 1)
+    if not cfg or not cfg.azure_openai_endpoint:
+        raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
+
+    # Run blocking parse in thread pool
+    loop = asyncio.get_event_loop()
+    try:
+        from core.cv_parser import parse_cv, CVParseError
+        cv_data = await loop.run_in_executor(
+            None,
+            parse_cv,
+            str(dest),
+            cfg.azure_openai_endpoint,
+            cfg.azure_openai_api_key,
+            cfg.azure_deployment_name or "gpt-4o-mini",
+        )
+    except Exception as e:
+        raise HTTPException(422, f"CV parse failed: {e}")
+
+    # Mark all existing profiles inactive
+    db.query(CVProfile).update({"is_active": False})
+
+    # Save new active profile
+    profile = CVProfile(
+        name=cv_data.name, email=cv_data.email, phone=cv_data.phone,
+        raw_text=cv_data.raw_text, skills=cv_data.skills,
+        job_titles=cv_data.job_titles, experience_years=cv_data.experience_years,
+        education=cv_data.education, summary=cv_data.summary,
+        pdf_path=str(dest), is_active=True,
+    )
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.get("/api/cv/profile", response_model=CVProfileRead)
+def get_profile(db: DBSession = Depends(get_db)):
+    profile = db.query(CVProfile).filter_by(is_active=True).order_by(CVProfile.id.desc()).first()
+    if not profile:
+        raise HTTPException(404, "No CV profile found. Upload a CV first.")
+    return profile
+
+
+@router.put("/api/cv/profile", response_model=CVProfileRead)
+def update_profile(body: CVProfileUpdate, db: DBSession = Depends(get_db)):
+    profile = db.query(CVProfile).filter_by(is_active=True).order_by(CVProfile.id.desc()).first()
+    if not profile:
+        raise HTTPException(404, "No CV profile found.")
+    for key, value in body.model_dump(exclude_unset=True).items():
+        if value is not None:
+            setattr(profile, key, value)
+    db.commit()
+    db.refresh(profile)
+    return profile

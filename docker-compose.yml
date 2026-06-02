@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:////app/data/smart_job_assistant.db
+      - CV_UPLOAD_DIR=/app/data/cv
+      - CHROME_USER_DATA_DIR=/app/chrome_profile
+      - PORT_NUM=9222
+      - DOCKER_ENV=1
+    volumes:
+      - ./data:/app/data             # SQLite DB + uploaded CVs (persisted on host)
+      - ./logs:/app/logs             # tracking logs (persisted on host)
+      - chrome_profile:/app/chrome_profile  # named volume — survives docker compose up --build
+    ports:
+      - "8000:8000"                  # expose for debugging; not required in production
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  # Named volume for Chrome session cookies.
+  # Persists across rebuilds — deleted only with `docker compose down -v`.
+  # Chrome logs into Naukri/LinkedIn once; subsequent sessions reuse cookies.
+  chrome_profile:

@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.local
+
+# Chrome profile
+chrome_profile/
+
+# Logs
+logs/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CV files
+cv/*.pdf
+cv/*.doc
+cv/*.docx
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.claude
