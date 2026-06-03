@@ -6,8 +6,9 @@ import pathlib
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session as DBSession
 
+from api.auth import get_current_user
 from api.database import get_db
-from api.models import CVProfile
+from api.models import CVProfile, User
 from api.schemas import CVProfileRead, CVProfileUpdate
 
 router = APIRouter()
@@ -16,7 +17,7 @@ CV_DIR = pathlib.Path(os.getenv("CV_UPLOAD_DIR", "./data/cv"))
 
 
 @router.post("/api/cv/parse", response_model=CVProfileRead)
-async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Depends(get_db)):
+async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     CV_DIR.mkdir(parents=True, exist_ok=True)
     dest = CV_DIR / "uploaded_resume.pdf"
 
@@ -63,7 +64,7 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
 
 
 @router.get("/api/cv/profile", response_model=CVProfileRead)
-def get_profile(db: DBSession = Depends(get_db)):
+def get_profile(db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     profile = db.query(CVProfile).filter_by(is_active=True).order_by(CVProfile.id.desc()).first()
     if not profile:
         raise HTTPException(404, "No CV profile found. Upload a CV first.")
@@ -71,7 +72,7 @@ def get_profile(db: DBSession = Depends(get_db)):
 
 
 @router.put("/api/cv/profile", response_model=CVProfileRead)
-def update_profile(body: CVProfileUpdate, db: DBSession = Depends(get_db)):
+def update_profile(body: CVProfileUpdate, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     profile = db.query(CVProfile).filter_by(is_active=True).order_by(CVProfile.id.desc()).first()
     if not profile:
         raise HTTPException(404, "No CV profile found.")

@@ -3,8 +3,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session as DBSession
 
+from api.auth import get_current_user
 from api.database import get_db
-from api.models import Session as SessionModel, Application
+from api.models import Session as SessionModel, Application, User
 from api.schemas import PaginatedApplications, SessionRead
 
 router = APIRouter()
@@ -14,6 +15,7 @@ router = APIRouter()
 def list_sessions(
     limit: int = Query(50, ge=1, le=200),
     db: DBSession = Depends(get_db),
+    _: User = Depends(get_current_user),
 ):
     sessions = (
         db.query(SessionModel)
@@ -25,7 +27,7 @@ def list_sessions(
 
 
 @router.get("/api/history/sessions/{session_id}", response_model=SessionRead)
-def get_session(session_id: int, db: DBSession = Depends(get_db)):
+def get_session(session_id: int, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     sess = db.get(SessionModel, session_id)
     if not sess:
         from fastapi import HTTPException
@@ -42,6 +44,7 @@ def list_applications(
     page       : int = Query(1,  ge=1),
     per_page   : int = Query(50, ge=1, le=200),
     db         : DBSession = Depends(get_db),
+    _          : User = Depends(get_current_user),
 ):
     q = db.query(Application)
     if session_id is not None:

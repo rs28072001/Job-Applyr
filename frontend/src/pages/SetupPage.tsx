@@ -1,278 +1,397 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
+import {
+  Upload, CheckCircle2, AlertCircle, Loader2, Play, Settings2,
+  MapPin, Target, Sliders, User, Mail, Phone,
+  Briefcase, Star, Save, ChevronDown,
+} from "lucide-react";
 import { api } from "../api/client";
 import type { AppConfig, CVProfile, SessionStartRequest } from "../api/types";
 import { useSessionStore } from "../store/sessionStore";
 
-// ── small helpers ──────────────────────────────────────────────────────────────
+/* ── Shared atoms ──────────────────────────────────────────────────────────── */
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function SectionCard({ title, description, icon: Icon, children }: {
+  title: string; description?: string; icon: React.ElementType; children: React.ReactNode;
+}) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-indigo-600" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        </div>
+      </div>
+      <div className="px-6 py-5">{children}</div>
     </div>
   );
 }
 
-const inp =
-  "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">
+      {children}{required && <span className="text-red-400 ml-0.5">*</span>}
+    </label>
+  );
+}
 
-// ── Wizard ────────────────────────────────────────────────────────────────────
+const inputCls = `w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm
+  focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+  hover:border-slate-300 bg-slate-50 text-slate-900 placeholder-slate-400`;
 
-function Wizard({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState(0);
-  const [, setForm] = useState<Partial<AppConfig>>({});
-  const [saving, setSaving] = useState(false);
+/* ── CV Upload Zone ──────────────────────────────────────────────────────── */
 
-  async function saveAndNext(fields: Partial<AppConfig>, last = false) {
-    setSaving(true);
-    await api.put("/api/config", fields);
-    setForm((f) => ({ ...f, ...fields }));
-    setSaving(false);
-    if (last) onDone();
-    else setStep((s) => s + 1);
+function CVUploadZone({ onParsed }: { onParsed: (p: CVProfile) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState("");
+  const [dragOver, setDragOver]   = useState(false);
+
+  async function process(file: File) {
+    if (!file.type.includes("pdf")) { setError("Please upload a PDF file"); return; }
+    setError(""); setUploading(true);
+    const fd = new FormData();
+    fd.append("cv_file", file);
+    try {
+      const r = await api.post<CVProfile>("/api/cv/parse", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 120_000,
+      });
+      onParsed(r.data);
+    } catch (e: any) {
+      setError(e.response?.data?.detail ?? "CV parsing failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Welcome 👋</h2>
-        <p className="text-sm text-gray-500 mb-6">
-          Step {step + 1} / 3 — complete setup once, credentials are saved to the DB.
+    <div>
+      <label
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) process(f); }}
+        className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-xl
+          py-10 px-6 cursor-pointer transition-all duration-200 ${
+          uploading ? "border-indigo-300 bg-indigo-50" :
+          dragOver  ? "border-indigo-400 bg-indigo-50 scale-[1.01]" :
+                      "border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/50"
+        }`}
+      >
+        {uploading ? (
+          <>
+            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+            </div>
+            <p className="text-sm font-medium text-indigo-700">Parsing CV with AI…</p>
+            <p className="text-xs text-indigo-500">This may take 15–30 seconds</p>
+          </>
+        ) : (
+          <>
+            <div className="w-12 h-12 bg-white border-2 border-slate-200 rounded-full flex items-center justify-center">
+              <Upload className="w-5 h-5 text-slate-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-slate-700">
+                Drop your CV here, or <span className="text-indigo-600">browse</span>
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">PDF only · AI will extract all fields automatically</p>
+            </div>
+          </>
+        )}
+        <input type="file" accept=".pdf" className="hidden" disabled={uploading}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) process(f); }} />
+      </label>
+      {error && (
+        <p className="flex items-center gap-1.5 mt-2 text-xs text-red-600">
+          <AlertCircle className="w-3.5 h-3.5" />{error}
         </p>
+      )}
+    </div>
+  );
+}
 
-        {step === 0 && (
-          <LLMStep onNext={(v) => saveAndNext(v)} saving={saving} />
-        )}
-        {step === 1 && (
-          <PlatformStep onNext={(v) => saveAndNext(v)} saving={saving} />
-        )}
-        {step === 2 && (
-          <PrefsStep onNext={(v) => saveAndNext(v, true)} saving={saving} />
+/* ── Profile display card ───────────────────────────────────────────────── */
+
+function ProfileCard({ profile }: { profile: CVProfile }) {
+  return (
+    <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <span className="text-sm font-semibold text-emerald-800">CV parsed successfully</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {[
+          { icon: User,     val: profile.name },
+          { icon: Mail,     val: profile.email },
+          { icon: Phone,    val: profile.phone },
+          { icon: Star,     val: `${profile.experience_years} years experience` },
+          { icon: Briefcase,val: profile.job_titles.slice(0,2).join(", ") },
+        ].filter(i => i.val).map(({ icon: Icon, val }) => (
+          <div key={val} className="flex items-center gap-1.5 text-slate-600">
+            <Icon className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="truncate">{val}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {profile.skills.slice(0, 8).map((s) => (
+          <span key={s} className="px-2 py-0.5 bg-white border border-emerald-200 text-emerald-700 text-xs rounded-full">
+            {s}
+          </span>
+        ))}
+        {profile.skills.length > 8 && (
+          <span className="px-2 py-0.5 bg-white border border-slate-200 text-slate-500 text-xs rounded-full">
+            +{profile.skills.length - 8} more
+          </span>
         )}
       </div>
     </div>
   );
 }
 
-function LLMStep({ onNext, saving }: { onNext: (v: Partial<AppConfig>) => void; saving: boolean }) {
-  const { register, handleSubmit } = useForm<Pick<AppConfig, "azure_openai_endpoint" | "azure_openai_api_key" | "azure_deployment_name">>();
+/* ── Settings accordion ─────────────────────────────────────────────────── */
+
+function SettingsAccordion() {
+  const [open, setOpen]     = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+  const [cfg, setCfg]       = useState({ naukri_email:"", naukri_password:"",
+                                          linkedin_email:"", linkedin_password:"",
+                                          confidence_threshold:75, max_jobs_per_hour:30 });
+
+  useEffect(() => {
+    if (!open) return;
+    api.get<AppConfig>("/api/config").then((r) => {
+      setCfg({
+        naukri_email: r.data.naukri_email || "",
+        naukri_password: r.data.naukri_password === "***" ? "" : (r.data.naukri_password || ""),
+        linkedin_email: r.data.linkedin_email || "",
+        linkedin_password: r.data.linkedin_password === "***" ? "" : (r.data.linkedin_password || ""),
+        confidence_threshold: r.data.confidence_threshold,
+        max_jobs_per_hour: r.data.max_jobs_per_hour,
+      });
+    });
+  }, [open]);
+
+  async function save() {
+    setSaving(true);
+    await api.put("/api/config", cfg);
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
   return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-4">
-      <Field label="Azure OpenAI Endpoint">
-        <input {...register("azure_openai_endpoint", { required: true })} className={inp} placeholder="https://..." />
-      </Field>
-      <Field label="Azure OpenAI API Key">
-        <input {...register("azure_openai_api_key", { required: true })} type="password" className={inp} />
-      </Field>
-      <Field label="Deployment / Model Name">
-        <input {...register("azure_deployment_name")} className={inp} placeholder="gpt-4o-mini" />
-      </Field>
-      <button type="submit" disabled={saving}
-        className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-        {saving ? "Saving…" : "Next →"}
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <button onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-slate-50 transition-colors">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
+          <Settings2 className="w-4 h-4 text-slate-600" />
+        </div>
+        <div className="flex-1 text-left">
+          <p className="text-sm font-semibold text-slate-900">Platform Credentials & Settings</p>
+          <p className="text-xs text-slate-500 mt-0.5">Naukri, LinkedIn, rate limits</p>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-    </form>
+
+      {open && (
+        <div className="px-6 py-5 border-t border-slate-100 space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { label:"Naukri Email",     k:"naukri_email",    type:"email" },
+              { label:"Naukri Password",  k:"naukri_password", type:"password" },
+              { label:"LinkedIn Email",   k:"linkedin_email",  type:"email" },
+              { label:"LinkedIn Password",k:"linkedin_password",type:"password"},
+            ].map(({ label, k, type }) => (
+              <div key={k}>
+                <Label>{label}</Label>
+                <input type={type} value={(cfg as any)[k]} placeholder={type === "password" ? "••••••••" : ""}
+                  onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })}
+                  className={inputCls} />
+              </div>
+            ))}
+            <div>
+              <Label>Confidence Threshold</Label>
+              <input type="number" min={0} max={100}
+                value={cfg.confidence_threshold}
+                onChange={(e) => setCfg({ ...cfg, confidence_threshold: +e.target.value })}
+                className={inputCls} />
+            </div>
+            <div>
+              <Label>Max Applications / Hour</Label>
+              <input type="number" min={1} max={100}
+                value={cfg.max_jobs_per_hour}
+                onChange={(e) => setCfg({ ...cfg, max_jobs_per_hour: +e.target.value })}
+                className={inputCls} />
+            </div>
+          </div>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700
+                       disabled:opacity-50 text-white text-sm font-semibold rounded-xl">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saved ? "Saved ✓" : saving ? "Saving…" : "Save settings"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
-function PlatformStep({ onNext, saving }: { onNext: (v: Partial<AppConfig>) => void; saving: boolean }) {
-  const { register, handleSubmit } = useForm<Pick<AppConfig, "naukri_email" | "naukri_password" | "linkedin_email" | "linkedin_password">>();
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-4">
-      <p className="text-xs text-gray-500 bg-blue-50 rounded-lg px-3 py-2">
-        Credentials are saved to a local SQLite DB and never leave your machine.
-      </p>
-      <Field label="Naukri Email"><input {...register("naukri_email")} className={inp} /></Field>
-      <Field label="Naukri Password"><input {...register("naukri_password")} type="password" className={inp} /></Field>
-      <Field label="LinkedIn Email"><input {...register("linkedin_email")} className={inp} /></Field>
-      <Field label="LinkedIn Password"><input {...register("linkedin_password")} type="password" className={inp} /></Field>
-      <button type="submit" disabled={saving}
-        className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-        {saving ? "Saving…" : "Next →"}
-      </button>
-    </form>
-  );
-}
-
-function PrefsStep({ onNext, saving }: { onNext: (v: Partial<AppConfig>) => void; saving: boolean }) {
-  const { register, handleSubmit } = useForm<Pick<AppConfig, "confidence_threshold" | "max_jobs_per_hour" | "max_jobs_per_day">>(
-    { defaultValues: { confidence_threshold: 75, max_jobs_per_hour: 30, max_jobs_per_day: 150 } }
-  );
-  return (
-    <form onSubmit={handleSubmit(onNext)} className="space-y-4">
-      <Field label="Confidence Threshold (0–100)">
-        <input {...register("confidence_threshold", { valueAsNumber: true })} type="number" className={inp} />
-      </Field>
-      <Field label="Max Applications / Hour">
-        <input {...register("max_jobs_per_hour", { valueAsNumber: true })} type="number" className={inp} />
-      </Field>
-      <Field label="Max Applications / Day">
-        <input {...register("max_jobs_per_day", { valueAsNumber: true })} type="number" className={inp} />
-      </Field>
-      <button type="submit" disabled={saving}
-        className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-        {saving ? "Saving…" : "Finish Setup ✓"}
-      </button>
-    </form>
-  );
-}
-
-// ── Main Setup page ────────────────────────────────────────────────────────────
+/* ── Main Page ──────────────────────────────────────────────────────────── */
 
 export default function SetupPage() {
   const navigate  = useNavigate();
-  const setRunning= useSessionStore((s) => s.setRunning);
   const reset     = useSessionStore((s) => s.reset);
+  const setRunning= useSessionStore((s) => s.setRunning);
 
-  const [config, setConfig]     = useState<AppConfig | null>(null);
   const [profile, setProfile]   = useState<CVProfile | null>(null);
-  const [showWizard, setWizard] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [startError, setStartError] = useState("");
+  const [startErr, setStartErr] = useState("");
 
-  // Session start form
   const { register, handleSubmit, setValue } = useForm<SessionStartRequest>({
-    defaultValues: {
-      platform: "naukri",
-      mode: "search_and_apply",
-      location: "gurugram",
-      job_target: 5,
-      confidence_threshold: 75,
-      keywords: [],
-    },
+    defaultValues: { platform:"naukri", mode:"search_and_apply",
+                     location:"gurugram", job_target:5, confidence_threshold:75, keywords:[] },
   });
 
   useEffect(() => {
-    api.get<AppConfig>("/api/config").then((r) => {
-      setConfig(r.data);
-      if (!r.data.is_configured) setWizard(true);
-      setValue("confidence_threshold", r.data.confidence_threshold);
-    });
-    api.get<CVProfile>("/api/cv/profile")
-      .then((r) => setProfile(r.data))
-      .catch(() => {});
+    api.get<CVProfile>("/api/cv/profile").then((r) => setProfile(r.data)).catch(() => {});
+    api.get<AppConfig>("/api/config").then((r) => setValue("confidence_threshold", r.data.confidence_threshold)).catch(() => {});
   }, [setValue]);
 
-  async function handleCVUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("cv_file", file);
-    try {
-      const r = await api.post<CVProfile>("/api/cv/parse", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setProfile(r.data);
-    } catch (err: any) {
-      alert("CV parse failed: " + (err.response?.data?.detail ?? err.message));
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function onStart(data: SessionStartRequest) {
-    setStartError("");
-    // Use CV job_titles as keywords if not provided
+    setStartErr("");
     const keywords = profile?.job_titles ?? ["Software Engineer"];
     try {
-      const r = await api.post<{ session_id: number }>("/api/session/start", {
-        ...data,
-        keywords,
-      });
+      const r = await api.post<{ session_id: number }>("/api/session/start", { ...data, keywords });
       reset();
       setRunning(true, r.data.session_id);
       navigate("/dashboard");
-    } catch (err: any) {
-      setStartError(err.response?.data?.detail ?? err.message);
+    } catch (e: any) {
+      setStartErr(e.response?.data?.detail ?? e.message);
     }
   }
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      {showWizard && <Wizard onDone={() => { setWizard(false); window.location.reload(); }} />}
+    <div className="p-8 max-w-5xl mx-auto">
+      {/* Page header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Setup</h1>
+        <p className="text-slate-500 text-sm mt-1">Configure your CV, job preferences, and start your session</p>
+      </div>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Setup</h1>
+      <div className="grid grid-cols-5 gap-6">
+        {/* Left column: CV + Settings */}
+        <div className="col-span-3 space-y-5">
+          {/* CV Upload */}
+          <SectionCard title="CV / Resume" description="Upload once — AI extracts all your info" icon={Upload}>
+            <CVUploadZone onParsed={setProfile} />
+            {profile && <ProfileCard profile={profile} />}
+          </SectionCard>
 
-      {/* CV Upload */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-        <h2 className="font-semibold text-gray-800 mb-4">📄 CV / Resume</h2>
-
-        <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg py-8 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
-          <span className="text-3xl mb-2">⬆️</span>
-          <span className="text-sm text-gray-600">
-            {uploading ? "Parsing CV…" : "Drop PDF here or click to upload"}
-          </span>
-          <input type="file" accept=".pdf" className="hidden" onChange={handleCVUpload} disabled={uploading} />
-        </label>
-
-        {profile && (
-          <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm space-y-1">
-            <p><span className="font-medium">Name:</span> {profile.name}</p>
-            <p><span className="font-medium">Email:</span> {profile.email}</p>
-            <p><span className="font-medium">Phone:</span> {profile.phone}</p>
-            <p><span className="font-medium">Experience:</span> {profile.experience_years} years</p>
-            <p><span className="font-medium">Titles:</span> {profile.job_titles.join(", ")}</p>
-            <p><span className="font-medium">Skills:</span> {profile.skills.slice(0, 10).join(", ")}</p>
-          </div>
-        )}
-      </section>
-
-      {/* Session Config */}
-      <form onSubmit={handleSubmit(onStart)}>
-        <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-          <h2 className="font-semibold text-gray-800">🎯 Job Search Preferences</h2>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Platform">
-              <select {...register("platform")} className={inp}>
-                <option value="naukri">Naukri</option>
-                <option value="linkedin">LinkedIn</option>
-                <option value="both">Both</option>
-              </select>
-            </Field>
-
-            <Field label="Mode">
-              <select {...register("mode")} className={inp}>
-                <option value="search_and_apply">Search & Apply</option>
-                <option value="search">Search Only</option>
-              </select>
-            </Field>
-
-            <Field label="Location">
-              <input {...register("location")} className={inp} placeholder="gurugram" />
-            </Field>
-
-            <Field label="Job Target">
-              <input {...register("job_target", { valueAsNumber: true })} type="number" min={1} max={100} className={inp} />
-            </Field>
-
-            <Field label="Confidence Threshold">
-              <input {...register("confidence_threshold", { valueAsNumber: true })} type="number" min={0} max={100} className={inp} />
-            </Field>
-          </div>
-
-          {startError && (
-            <p className="text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">{startError}</p>
-          )}
-
-          <button type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors mt-2">
-            🚀 Start Session
-          </button>
-        </section>
-      </form>
-
-      {/* Config summary */}
-      {config && (
-        <div className="mt-4 text-xs text-gray-400 space-y-0.5 px-1">
-          <p>Model: {config.azure_deployment_name} · Threshold: {config.confidence_threshold} · Max/hr: {config.max_jobs_per_hour}</p>
-          <button onClick={() => setWizard(true)} className="text-blue-500 hover:underline">Edit credentials →</button>
+          {/* Platform settings accordion */}
+          <SettingsAccordion />
         </div>
-      )}
+
+        {/* Right column: Launch config */}
+        <div className="col-span-2">
+          <form onSubmit={handleSubmit(onStart)}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-6">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+                  <Play className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Launch Session</p>
+                  <p className="text-xs text-slate-500">Configure and start</p>
+                </div>
+              </div>
+
+              <div className="px-5 py-5 space-y-4">
+                {/* Platform */}
+                <div>
+                  <Label>Platform</Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {["naukri","linkedin","both"].map((p) => (
+                      <label key={p} className="cursor-pointer">
+                        <input type="radio" value={p} {...register("platform")} className="sr-only peer" />
+                        <div className="text-center py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-600
+                                        peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600
+                                        hover:border-slate-300 capitalize">
+                          {p}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mode */}
+                <div>
+                  <Label>Mode</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { v:"search_and_apply", l:"Search & Apply" },
+                      { v:"search",           l:"Search Only" },
+                    ].map(({ v, l }) => (
+                      <label key={v} className="cursor-pointer">
+                        <input type="radio" value={v} {...register("mode")} className="sr-only peer" />
+                        <div className="text-center py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-600
+                                        peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600
+                                        hover:border-slate-300">
+                          {l}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div>
+                  <Label>Location</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input {...register("location")} placeholder="gurugram" className={`${inputCls} pl-8`} />
+                  </div>
+                </div>
+
+                {/* Target + Threshold */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Target jobs</Label>
+                    <div className="relative">
+                      <Target className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input type="number" min={1} max={100} {...register("job_target",{valueAsNumber:true})}
+                        className={`${inputCls} pl-8`} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Min score</Label>
+                    <div className="relative">
+                      <Sliders className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input type="number" min={0} max={100} {...register("confidence_threshold",{valueAsNumber:true})}
+                        className={`${inputCls} pl-8`} />
+                    </div>
+                  </div>
+                </div>
+
+                {startErr && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 text-xs text-red-600">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />{startErr}
+                  </div>
+                )}
+
+                <button type="submit"
+                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700
+                             text-white font-bold py-3 rounded-xl text-sm shadow-sm shadow-indigo-200 mt-1">
+                  <Play className="w-4 h-4" /> Start Session
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

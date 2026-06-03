@@ -1,214 +1,289 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Square, ArrowLeft, ExternalLink, TrendingUp, CheckCircle2, XCircle, AlertCircle, Clock } from "lucide-react";
 import { api } from "../api/client";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useSessionStore, type JobEntry } from "../store/sessionStore";
 
-// ── Status badge ──────────────────────────────────────────────────────────────
-
-function Badge({ status }: { status?: string }) {
-  const map: Record<string, string> = {
-    applied:          "bg-green-100 text-green-800",
-    skipped:          "bg-gray-100 text-gray-600",
-    skipped_external: "bg-yellow-100 text-yellow-800",
-    error:            "bg-red-100 text-red-700",
-    pending:          "bg-blue-50 text-blue-500",
-  };
-  const cls = map[status ?? "pending"] ?? "bg-gray-100 text-gray-500";
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{status ?? "…"}</span>;
-}
-
-// ── Score bar ─────────────────────────────────────────────────────────────────
-
-function ScoreBar({ score }: { score?: number }) {
-  if (score === undefined) return <span className="text-xs text-gray-400">scoring…</span>;
-  const pct = Math.min(100, Math.max(0, score));
-  const colour = pct >= 75 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-400";
+/* ── Stat card ──────────────────────────────────────────────────────────── */
+function StatCard({ label, value, icon: Icon, color }: {
+  label: string; value: string | number; icon: React.ElementType; color: string;
+}) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
-        <div className={`h-2 rounded-full ${colour} transition-all`} style={{ width: `${pct}%` }} />
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+          <Icon className="w-4 h-4" />
+        </div>
       </div>
-      <span className="text-xs font-medium text-gray-700 w-7 text-right">{score}</span>
+      <p className="text-3xl font-extrabold text-slate-900">{value}</p>
     </div>
   );
 }
 
-// ── Skill chips ───────────────────────────────────────────────────────────────
-
-function Chips({ skills, colour }: { skills?: string[]; colour: string }) {
-  if (!skills?.length) return null;
+/* ── Login chip ─────────────────────────────────────────────────────────── */
+function LoginChip({ platform, status }: { platform: string; status?: boolean }) {
+  const cfg = status === true  ? { bg:"bg-emerald-50",  border:"border-emerald-200", dot:"bg-emerald-500",  text:"text-emerald-700", label:"✓ Logged in"  }
+            : status === false ? { bg:"bg-red-50",      border:"border-red-200",     dot:"bg-red-500",     text:"text-red-700",     label:"✗ Failed"     }
+            :                    { bg:"bg-slate-50",    border:"border-slate-200",   dot:"bg-slate-300",   text:"text-slate-500",   label:"Waiting…"     };
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {skills.slice(0, 8).map((s) => (
-        <span key={s} className={`text-xs px-1.5 py-0.5 rounded ${colour}`}>{s}</span>
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${cfg.bg} ${cfg.border}`}>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot} ${status === undefined ? "animate-pulse" : ""}`} />
+      <span className={`text-xs font-semibold capitalize ${cfg.text}`}>{platform}</span>
+      <span className={`text-xs ${cfg.text} opacity-80`}>{cfg.label}</span>
+    </div>
+  );
+}
+
+/* ── Score bar ──────────────────────────────────────────────────────────── */
+function ScoreBar({ score }: { score?: number }) {
+  if (score === undefined) return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full w-1/3 bg-slate-200 rounded-full animate-pulse" />
+      </div>
+      <span className="text-xs text-slate-400 w-6">…</span>
+    </div>
+  );
+  const color = score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400";
+  const textColor = score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-500";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ${color}`}
+             style={{ width: `${Math.min(100, score)}%` }} />
+      </div>
+      <span className={`text-xs font-bold w-6 text-right ${textColor}`}>{score}</span>
+    </div>
+  );
+}
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+function StatusBadge({ status }: { status?: string }) {
+  const map: Record<string, string> = {
+    applied:          "bg-emerald-100 text-emerald-700 border border-emerald-200",
+    skipped:          "bg-slate-100 text-slate-500 border border-slate-200",
+    skipped_external: "bg-amber-50 text-amber-700 border border-amber-200",
+    error:            "bg-red-50 text-red-600 border border-red-200",
+  };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${map[status ?? ""] ?? "bg-blue-50 text-blue-500 border border-blue-100"}`}>
+      {status ?? "analysing"}
+    </span>
+  );
+}
+
+/* ── Skill chips ─────────────────────────────────────────────────────────── */
+function Skills({ items, color }: { items?: string[]; color: string }) {
+  if (!items?.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {items.slice(0, 6).map((s) => (
+        <span key={s} className={`text-xs px-1.5 py-0.5 rounded-md ${color}`}>{s}</span>
       ))}
     </div>
   );
 }
 
-// ── Job card (one row in the table) ──────────────────────────────────────────
+/* ── Job row ─────────────────────────────────────────────────────────────── */
+function JobRow({ job, isNew }: { job: JobEntry; isNew: boolean }) {
+  const initials = (job.company || "?").slice(0, 2).toUpperCase();
+  const hue = ((job.company.charCodeAt(0) || 65) * 47) % 360;
 
-function JobRow({ job }: { job: JobEntry }) {
-  const isLatest = !job.status;
   return (
-    <div className={`px-4 py-3 border-b border-gray-100 text-sm ${isLatest ? "bg-blue-50" : ""}`}>
-      <div className="flex items-start justify-between gap-3">
+    <div className={`px-5 py-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors
+                     ${isNew ? "bg-indigo-50/30" : ""}`}>
+      <div className="flex items-start gap-4">
+        {/* Company avatar */}
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+             style={{ backgroundColor: `hsl(${hue},55%,55%)` }}>
+          {initials}
+        </div>
+
+        {/* Main content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 w-7">{job.idx}/{job.total}</span>
-            <span className="font-medium text-gray-900 truncate">{job.title}</span>
-            <span className="text-gray-500">@ {job.company}</span>
-            {job.salary && <span className="text-xs text-green-700 bg-green-50 px-1.5 py-0.5 rounded">{job.salary}</span>}
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-sm truncate">{job.title}</p>
+              <p className="text-xs text-slate-500">{job.company}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-slate-400">{job.idx}/{job.total}</span>
+              <StatusBadge status={job.status} />
+              {job.url && (
+                <a href={job.url} target="_blank" rel="noreferrer"
+                   className="text-slate-300 hover:text-indigo-500">
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
           </div>
-          <div className="mt-1.5 w-48">
+
+          <div className="mt-2 max-w-xs">
             <ScoreBar score={job.score} />
           </div>
-          {job.rationale && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{job.rationale}</p>}
-          <Chips skills={job.matched} colour="bg-green-100 text-green-700" />
-          <Chips skills={job.missing} colour="bg-red-100 text-red-600" />
-        </div>
-        <div className="shrink-0">
-          <Badge status={job.status} />
+
+          {job.rationale && (
+            <p className="text-xs text-slate-400 mt-1.5 line-clamp-1 italic">{job.rationale}</p>
+          )}
+
+          <Skills items={job.matched} color="bg-emerald-50 text-emerald-700" />
+          <Skills items={job.missing} color="bg-red-50 text-red-600" />
         </div>
       </div>
     </div>
   );
 }
 
-// ── Log feed ──────────────────────────────────────────────────────────────────
-
+/* ── Log feed ─────────────────────────────────────────────────────────────── */
 function LogFeed() {
-  const logs    = useSessionStore((s) => s.logs);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const logs     = useSessionStore((s) => s.logs);
+  const bottomRef= useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs.length]);
 
-  const colour = (level: string) => {
-    if (level === "error")   return "text-red-400";
-    if (level === "success") return "text-green-400";
-    if (level === "warning") return "text-yellow-400";
-    return "text-gray-300";
-  };
+  const lvlColor = (l: string) =>
+    l === "error"   ? "text-red-400" :
+    l === "success" ? "text-emerald-400" :
+    l === "warning" ? "text-amber-400" : "text-slate-400";
 
   return (
-    <div className="bg-gray-900 rounded-xl overflow-hidden flex flex-col h-64">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-        <span className="text-xs text-gray-400 font-mono">Live Log</span>
-        <span className="text-xs text-gray-500">{logs.length} entries</span>
+    <div className="bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex flex-col">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800">
+        <div className="flex gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/60" />
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/60" />
+        </div>
+        <span className="text-slate-500 text-xs font-mono ml-1">live log</span>
+        <span className="ml-auto text-slate-600 text-xs font-mono">{logs.length} lines</span>
       </div>
-      <div className="overflow-y-auto flex-1 px-4 py-2 font-mono text-xs space-y-0.5">
-        {logs.map((l, i) => (
-          <div key={i} className={colour(l.level)}>
-            <span className="text-gray-600 mr-2">{l.ts}</span>{l.msg}
-          </div>
-        ))}
+      <div className="overflow-y-auto max-h-64 px-4 py-3 font-mono text-xs space-y-0.5">
+        {logs.length === 0 ? (
+          <p className="text-slate-600 italic">Waiting for session events…</p>
+        ) : (
+          logs.map((l, i) => (
+            <div key={i}>
+              <span className="text-slate-700 select-none mr-2">{l.ts}</span>
+              <span className={lvlColor(l.level)}>{l.msg}</span>
+            </div>
+          ))
+        )}
         <div ref={bottomRef} />
       </div>
     </div>
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
+/* ── Dashboard page ────────────────────────────────────────────────────── */
 
 export default function DashboardPage() {
-  useWebSocket();   // connect + auto-reconnect, dispatches to store
+  useWebSocket();
 
-  const navigate       = useNavigate();
-  const isRunning      = useSessionStore((s) => s.isRunning);
-  const loginStatus    = useSessionStore((s) => s.loginStatus);
-  const searchCounts   = useSessionStore((s) => s.searchCounts);
-  const jobs           = useSessionStore((s) => s.jobs);
-  const appliedCount   = useSessionStore((s) => s.appliedCount);
-  const target         = useSessionStore((s) => s.target);
+  const navigate     = useNavigate();
+  const isRunning    = useSessionStore((s) => s.isRunning);
+  const loginStatus  = useSessionStore((s) => s.loginStatus);
+  const jobs         = useSessionStore((s) => s.jobs);
+  const appliedCount = useSessionStore((s) => s.appliedCount);
+  const target       = useSessionStore((s) => s.target);
+  const logs         = useSessionStore((s) => s.logs);
 
-  async function handleStop() {
-    await api.post("/api/session/stop");
-  }
-
-  const totalFound = Object.values(searchCounts).reduce((a, b) => a + b, 0);
-  const pct = target > 0 ? Math.round((appliedCount / target) * 100) : 0;
+  const applied   = jobs.filter((j) => j.status === "applied").length;
+  const skipped   = jobs.filter((j) => j.status?.startsWith("skipped")).length;
+  const errors    = jobs.filter((j) => j.status === "error").length;
+  const pct       = target > 0 ? Math.round(((appliedCount || applied) / target) * 100) : 0;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Live Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {isRunning ? "Session in progress…" : "Session ended"}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isRunning && (
-            <button onClick={handleStop}
-              className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">
-              ■ Stop
-            </button>
-          )}
+        <div className="flex items-center gap-4">
           <button onClick={() => navigate("/")}
-            className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300">
-            ← Setup
+            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500">
+            <ArrowLeft className="w-4 h-4" />
           </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-900">Live Dashboard</h1>
+              {isRunning && (
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200
+                                 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  Running
+                </span>
+              )}
+              {!isRunning && logs.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200
+                                 text-slate-600 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  Completed
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5">Real-time job application progress</p>
+          </div>
         </div>
+        {isRunning && (
+          <button onClick={() => api.post("/api/session/stop")}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700
+                       text-white text-sm font-semibold rounded-xl shadow-sm shadow-red-200">
+            <Square className="w-3.5 h-3.5" /> Stop session
+          </button>
+        )}
       </div>
 
-      {/* Login + stats row */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* Login status */}
+      <div className="flex gap-3 flex-wrap">
         {["naukri", "linkedin"].map((p) => (
-          <div key={p} className={`bg-white border rounded-xl px-4 py-3 text-sm shadow-sm ${
-            loginStatus[p] === true  ? "border-green-300" :
-            loginStatus[p] === false ? "border-red-300"   : "border-gray-200"
-          }`}>
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 capitalize">{p}</p>
-            <p className={`font-semibold ${
-              loginStatus[p] === true  ? "text-green-700" :
-              loginStatus[p] === false ? "text-red-600"   : "text-gray-400"
-            }`}>
-              {loginStatus[p] === true ? "✓ Logged in" : loginStatus[p] === false ? "✗ Failed" : "—"}
-            </p>
-          </div>
+          <LoginChip key={p} platform={p} status={loginStatus[p]} />
         ))}
+      </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm shadow-sm">
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Found</p>
-          <p className="text-xl font-bold text-gray-900">{totalFound}</p>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm shadow-sm">
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Applied</p>
-          <p className="text-xl font-bold text-blue-600">{appliedCount} / {target || "—"}</p>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Analysed"  value={jobs.length} icon={TrendingUp}     color="bg-indigo-50 text-indigo-600" />
+        <StatCard label="Applied"   value={applied}      icon={CheckCircle2}   color="bg-emerald-50 text-emerald-600" />
+        <StatCard label="Skipped"   value={skipped}      icon={XCircle}        color="bg-slate-100 text-slate-500" />
+        <StatCard label="Errors"    value={errors}       icon={AlertCircle}    color="bg-red-50 text-red-500" />
       </div>
 
       {/* Progress bar */}
       {target > 0 && (
-        <div>
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Progress</span><span>{pct}%</span>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-700">Progress toward target</span>
+            </div>
+            <span className="text-sm font-bold text-slate-900">{appliedCount || applied} / {target} applied</span>
           </div>
-          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-3 bg-blue-500 rounded-full transition-all duration-500"
-              style={{ width: `${pct}%` }} />
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-700
+              ${pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`}
+              style={{ width: `${Math.min(100, pct)}%` }} />
           </div>
+          <p className="text-xs text-slate-400 mt-1.5">{pct}% complete</p>
         </div>
       )}
 
       {/* Jobs table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-700">Jobs Analysed</span>
-          <span className="text-xs text-gray-400">{jobs.length} total</span>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Jobs Analysed</h2>
+          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{jobs.length}</span>
         </div>
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-[28rem] overflow-y-auto">
           {jobs.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-400">
-              {isRunning ? "Waiting for search results…" : "No jobs found yet."}
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <TrendingUp className="w-10 h-10 mb-3 opacity-20" />
+              <p className="text-sm">{isRunning ? "Searching for jobs…" : "No jobs found yet"}</p>
             </div>
           ) : (
-            jobs.map((job, i) => <JobRow key={i} job={job} />)
+            jobs.map((job, i) => (
+              <JobRow key={i} job={job} isNew={i === jobs.length - 1 && isRunning} />
+            ))
           )}
         </div>
       </div>

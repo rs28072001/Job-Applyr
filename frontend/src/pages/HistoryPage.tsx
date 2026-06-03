@@ -1,33 +1,35 @@
 import { useState, useEffect } from "react";
+import { History, CheckCircle2, XCircle, AlertCircle, ExternalLink, Clock, Filter } from "lucide-react";
 import { api } from "../api/client";
 import type { SessionRecord, ApplicationRecord, PaginatedApplications } from "../api/types";
 
-function StatusDot({ status }: { status: string }) {
-  const m: Record<string, string> = {
-    completed: "bg-green-500", running: "bg-blue-500",
-    stopped: "bg-yellow-500", failed: "bg-red-500",
-  };
-  return <span className={`inline-block w-2 h-2 rounded-full ${m[status] ?? "bg-gray-400"}`} />;
+function statusMeta(s: string) {
+  if (s === "completed") return { color:"text-emerald-600", bg:"bg-emerald-50", border:"border-emerald-200", dot:"bg-emerald-500" };
+  if (s === "running")   return { color:"text-blue-600",    bg:"bg-blue-50",    border:"border-blue-200",    dot:"bg-blue-500 animate-pulse" };
+  if (s === "stopped")   return { color:"text-amber-600",   bg:"bg-amber-50",   border:"border-amber-200",   dot:"bg-amber-500" };
+  return                        { color:"text-red-600",     bg:"bg-red-50",     border:"border-red-200",     dot:"bg-red-500" };
 }
 
-function AppBadge({ status }: { status: string }) {
-  const m: Record<string, string> = {
-    applied: "bg-green-100 text-green-800",
-    skipped: "bg-gray-100 text-gray-600",
-    skipped_external: "bg-yellow-100 text-yellow-800",
-    error: "bg-red-100 text-red-700",
-  };
-  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m[status] ?? "bg-gray-100"}`}>{status}</span>;
+function appStatusBadge(s: string) {
+  if (s === "applied")           return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+  if (s === "skipped")           return "bg-slate-100 text-slate-500 border border-slate-200";
+  if (s === "skipped_external")  return "bg-amber-50 text-amber-700 border border-amber-200";
+  return "bg-red-50 text-red-600 border border-red-200";
+}
+
+function ScorePill({ score }: { score: number }) {
+  const color = score >= 75 ? "bg-emerald-100 text-emerald-700" : score >= 50 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600";
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>{score}</span>;
 }
 
 export default function HistoryPage() {
-  const [sessions, setSessions]     = useState<SessionRecord[]>([]);
-  const [selected, setSelected]     = useState<number | null>(null);
-  const [apps, setApps]             = useState<ApplicationRecord[]>([]);
-  const [total, setTotal]           = useState(0);
-  const [page, setPage]             = useState(1);
-  const [statusFilter, setStatus]   = useState("");
-  const PER_PAGE = 25;
+  const [sessions, setSessions]   = useState<SessionRecord[]>([]);
+  const [selected, setSelected]   = useState<number | null>(null);
+  const [apps, setApps]           = useState<ApplicationRecord[]>([]);
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+  const [statusFilter, setStatus] = useState("");
+  const PER_PAGE = 20;
 
   useEffect(() => {
     api.get<SessionRecord[]>("/api/history/sessions").then((r) => setSessions(r.data));
@@ -38,91 +40,152 @@ export default function HistoryPage() {
     const params: Record<string, unknown> = { session_id: selected, page, per_page: PER_PAGE };
     if (statusFilter) params.status = statusFilter;
     api.get<PaginatedApplications>("/api/history", { params }).then((r) => {
-      setApps(r.data.records);
-      setTotal(r.data.total);
+      setApps(r.data.records); setTotal(r.data.total);
     });
   }, [selected, page, statusFilter]);
 
-  return (
-    <div className="p-8 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">History</h1>
+  const totalPages = Math.ceil(total / PER_PAGE);
 
-      <div className="grid grid-cols-3 gap-6">
+  return (
+    <div className="p-8 max-w-6xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">History</h1>
+        <p className="text-slate-500 text-sm mt-1">All past job search sessions and applications</p>
+      </div>
+
+      <div className="grid grid-cols-12 gap-6">
         {/* Sessions sidebar */}
-        <div className="col-span-1 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <span className="text-sm font-semibold text-gray-700">Sessions</span>
-          </div>
-          <div className="overflow-y-auto max-h-[70vh]">
-            {sessions.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8">No sessions yet.</p>
-            )}
-            {sessions.map((s) => (
-              <button key={s.id} onClick={() => { setSelected(s.id); setPage(1); }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 text-sm transition-colors ${
-                  selected === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""
-                }`}>
-                <div className="flex items-center gap-2">
-                  <StatusDot status={s.status} />
-                  <span className="font-medium text-gray-800 capitalize">{s.platform}</span>
-                  <span className="text-gray-400 text-xs">{new Date(s.started_at).toLocaleDateString()}</span>
+        <div className="col-span-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3.5 border-b border-slate-100 flex items-center gap-2">
+              <History className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-800">Sessions</span>
+              <span className="ml-auto bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full">{sessions.length}</span>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(100vh-14rem)]">
+              {sessions.length === 0 && (
+                <div className="flex flex-col items-center py-12 text-slate-400">
+                  <Clock className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-sm">No sessions yet</p>
+                  <p className="text-xs mt-1 text-slate-300">Run a session to see history</p>
                 </div>
-                <div className="mt-0.5 flex gap-3 text-xs text-gray-500">
-                  <span>✓ {s.applied}</span>
-                  <span>○ {s.skipped}</span>
-                  <span>target {s.job_target}</span>
-                </div>
-              </button>
-            ))}
+              )}
+              {sessions.map((s) => {
+                const meta = statusMeta(s.status);
+                const isSelected = selected === s.id;
+                return (
+                  <button key={s.id} onClick={() => { setSelected(s.id); setPage(1); setStatus(""); }}
+                    className={`w-full text-left px-4 py-3.5 border-b border-slate-100 hover:bg-slate-50
+                               transition-colors ${isSelected ? "bg-indigo-50 border-l-2 border-l-indigo-500" : ""}`}>
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
+                      <span className="font-semibold text-sm text-slate-900 capitalize">{s.platform}</span>
+                      <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full border ${meta.bg} ${meta.border} ${meta.color}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 mt-2">
+                      <div className="bg-emerald-50 rounded-lg px-2 py-1 text-center">
+                        <p className="text-emerald-700 font-bold text-sm">{s.applied}</p>
+                        <p className="text-emerald-600 text-xs">applied</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg px-2 py-1 text-center">
+                        <p className="text-slate-600 font-bold text-sm">{s.skipped}</p>
+                        <p className="text-slate-500 text-xs">skipped</p>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg px-2 py-1 text-center">
+                        <p className="text-slate-600 font-bold text-sm">{s.job_target}</p>
+                        <p className="text-slate-500 text-xs">target</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                      {new Date(s.started_at).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}
+                      {" · "}
+                      {new Date(s.started_at).toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Applications table */}
-        <div className="col-span-2 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="col-span-8">
           {selected === null ? (
-            <div className="flex items-center justify-center h-64 text-sm text-gray-400">
-              ← Select a session to view applications
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm
+                            flex flex-col items-center justify-center h-64 text-slate-400">
+              <History className="w-10 h-10 mb-3 opacity-20" />
+              <p className="text-sm font-medium">Select a session to view applications</p>
             </div>
           ) : (
-            <>
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-gray-700">Applications ({total})</span>
-                <select value={statusFilter} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-                  className="border border-gray-300 rounded-lg px-2 py-1 text-xs">
-                  <option value="">All statuses</option>
-                  <option value="applied">Applied</option>
-                  <option value="skipped">Skipped</option>
-                  <option value="skipped_external">External ATS</option>
-                  <option value="error">Error</option>
-                </select>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Toolbar */}
+              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-slate-800 flex-1">
+                  Applications
+                  <span className="ml-2 text-slate-400 font-normal">({total})</span>
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <select value={statusFilter} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+                    className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600
+                               bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">All statuses</option>
+                    <option value="applied">Applied</option>
+                    <option value="skipped">Skipped</option>
+                    <option value="skipped_external">External ATS</option>
+                    <option value="error">Error</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="overflow-y-auto max-h-[65vh]">
+              {/* Table */}
+              <div className="overflow-auto max-h-[calc(100vh-18rem)]">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-2 text-left">Job</th>
-                      <th className="px-4 py-2 text-left">Score</th>
-                      <th className="px-4 py-2 text-left">Status</th>
-                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Job</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Score</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
+                    {apps.length === 0 && (
+                      <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-400 text-sm">No applications found</td></tr>
+                    )}
                     {apps.map((a) => (
-                      <tr key={a.id} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-2">
-                          <a href={a.job_url} target="_blank" rel="noreferrer"
-                            className="font-medium text-blue-600 hover:underline line-clamp-1">{a.job_title}</a>
-                          <p className="text-xs text-gray-500">{a.company}</p>
+                      <tr key={a.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                                 style={{ backgroundColor: `hsl(${(a.company.charCodeAt(0)*47)%360},50%,55%)` }}>
+                              {a.company.slice(0,2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <a href={a.job_url} target="_blank" rel="noreferrer"
+                                 className="font-semibold text-slate-900 hover:text-indigo-600 flex items-center gap-1 group">
+                                <span className="truncate max-w-[200px]">{a.job_title}</span>
+                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 shrink-0" />
+                              </a>
+                              <p className="text-xs text-slate-400 truncate">{a.company}</p>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-2">
-                          <span className={`font-bold ${a.score >= 75 ? "text-green-600" : a.score >= 50 ? "text-yellow-600" : "text-red-500"}`}>
-                            {a.score}
+                        <td className="px-4 py-3.5 text-center">
+                          <ScorePill score={a.score} />
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${appStatusBadge(a.status)}`}>
+                            {a.status}
                           </span>
+                          {a.status === "applied"           && <CheckCircle2 className="inline w-3 h-3 text-emerald-500 ml-1" />}
+                          {a.status === "skipped"           && <XCircle      className="inline w-3 h-3 text-slate-400 ml-1" />}
+                          {a.status === "error"             && <AlertCircle  className="inline w-3 h-3 text-red-500 ml-1" />}
                         </td>
-                        <td className="px-4 py-2"><AppBadge status={a.status} /></td>
-                        <td className="px-4 py-2 text-xs text-gray-400">
-                          {new Date(a.timestamp).toLocaleDateString()}
+                        <td className="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">
+                          {new Date(a.timestamp).toLocaleDateString("en-IN", { day:"numeric", month:"short" })}
                         </td>
                       </tr>
                     ))}
@@ -131,18 +194,24 @@ export default function HistoryPage() {
               </div>
 
               {/* Pagination */}
-              {total > PER_PAGE && (
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                  <span>Page {page} of {Math.ceil(total / PER_PAGE)}</span>
-                  <div className="flex gap-2">
-                    <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}
-                      className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50">←</button>
-                    <button disabled={page >= Math.ceil(total / PER_PAGE)} onClick={() => setPage((p) => p + 1)}
-                      className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50">→</button>
+              {totalPages > 1 && (
+                <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">
+                    Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+                  </span>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
+                      <button key={p} onClick={() => setPage(p)}
+                        className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${
+                          p === page ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"
+                        }`}>
+                        {p}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

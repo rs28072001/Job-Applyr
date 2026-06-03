@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models — replaces .env and applications.json."""
+"""SQLAlchemy ORM models — User auth + app data."""
 from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey,
@@ -9,6 +9,18 @@ from api.database import Base
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+class User(Base):
+    """Application user — email/password authentication."""
+    __tablename__ = "users"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    email           = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    full_name       = Column(String, default="")
+    created_at      = Column(DateTime, default=_now)
+    is_active       = Column(Boolean, default=True)
 
 
 class Config(Base):

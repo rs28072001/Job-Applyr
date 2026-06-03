@@ -2,8 +2,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 
+from api.auth import get_current_user
 from api.database import get_db
-from api.models import Session as SessionModel, CVProfile, Config as ConfigModel
+from api.models import Session as SessionModel, CVProfile, Config as ConfigModel, User
 from api.schemas import SessionStartRequest, SessionStatus
 import api.session_manager as sm
 
@@ -11,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/api/session/start")
-def start_session(body: SessionStartRequest, db: DBSession = Depends(get_db)):
+def start_session(body: SessionStartRequest, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     if sm.is_running():
         raise HTTPException(409, "A session is already running. Stop it first.")
 
@@ -46,7 +47,7 @@ def start_session(body: SessionStartRequest, db: DBSession = Depends(get_db)):
 
 
 @router.post("/api/session/stop")
-def stop_session():
+def stop_session(_: User = Depends(get_current_user)):
     if not sm.is_running():
         raise HTTPException(400, "No session is currently running.")
     sm.stop()
@@ -54,7 +55,7 @@ def stop_session():
 
 
 @router.get("/api/session/status", response_model=SessionStatus)
-def session_status():
+def session_status(_: User = Depends(get_current_user)):
     return SessionStatus(
         is_running=sm.is_running(),
         session_id=sm.current_session_id(),
