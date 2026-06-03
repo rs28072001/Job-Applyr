@@ -41,6 +41,10 @@ cv/*.pdf
 cv/*.doc
 cv/*.docx
 
+# Runtime data — SQLite DB and uploaded CVs (persisted via Docker volume)
+data/*.db
+data/cv/
+
 # Temporary files
 *.tmp
 *.temp
