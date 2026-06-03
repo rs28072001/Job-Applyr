@@ -50,7 +50,7 @@ def start(session_id: int, run_kwargs: dict) -> None:
         _started_at = datetime.now(timezone.utc)
         _is_running = True
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     future = loop.run_in_executor(
         _executor,
         _run_session_sync,
