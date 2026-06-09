@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import time
@@ -9,6 +10,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+
+logger = logging.getLogger(__name__)
 
 
 class ChromeNotFoundError(Exception):
@@ -36,6 +39,7 @@ def get_chrome_executable() -> str:
     else:
         candidates = [
             "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
             "/snap/bin/chromium",
         ]
@@ -70,23 +74,14 @@ def launch_chrome_debug(port: int, user_data_dir: str) -> subprocess.Popen:
         "--no-default-browser-check",
     ]
 
-    # Docker / headless environment requires these extra flags
-    if os.getenv("DOCKER_ENV"):
-        args += [
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--headless=new",
-            "--disable-gpu",
-        ]
+    proc = subprocess.Popen(args)
 
-    proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    for _ in range(15):
+    for _ in range(30):
         if is_chrome_debug_running(port):
             return proc
         time.sleep(0.5)
 
-    raise ChromeAttachError(f"Chrome launched but did not respond on port {port} within 7.5s")
+    raise ChromeAttachError(f"Chrome launched but did not respond on port {port} within 15s")
 
 
 def get_driver(port: int) -> webdriver.Chrome:

@@ -1,5 +1,4 @@
 """POST /api/cv/parse  ·  GET /api/cv/profile  ·  PUT /api/cv/profile"""
-import asyncio
 import os
 import pathlib
 
@@ -31,13 +30,10 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
     if not cfg or not cfg.azure_openai_endpoint:
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
 
-    # Run blocking parse in thread pool
-    loop = asyncio.get_event_loop()
+    # Run blocking parse
     try:
         from core.cv_parser import parse_cv, CVParseError
-        cv_data = await loop.run_in_executor(
-            None,
-            parse_cv,
+        cv_data = parse_cv(
             str(dest),
             cfg.azure_openai_endpoint,
             cfg.azure_openai_api_key,

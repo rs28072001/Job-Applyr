@@ -369,6 +369,12 @@ def apply_to_job(
         driver.execute_script("arguments[0].click();", apply_btn)
         rate_limiter.wait_page_load()
 
+        # Detect redirect to login page — means session expired / not logged in
+        current = driver.current_url.lower()
+        if "nlogin" in current or "/login" in current:
+            logger.warning("Redirected to login page after apply — not logged in: %s", listing.title)
+            return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
+
         # Handle Naukri chatbot drawer if it appears
         _handle_chatbot(driver, llm, cv_data, rate_limiter)
 
@@ -390,8 +396,12 @@ def apply_to_job(
             logger.info("Applied successfully: %s @ %s", listing.title, listing.company)
             return ApplicationResult(success=True, status="applied")
         except TimeoutException:
-            logger.info("Applied (no success indicator): %s @ %s", listing.title, listing.company)
-            return ApplicationResult(success=True, status="applied")
+            # Check once more if redirected to login
+            current = driver.current_url.lower()
+            if "nlogin" in current or "/login" in current:
+                return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
+            logger.warning("No success indicator after apply — marking as error: %s", listing.title)
+            return ApplicationResult(success=False, status="error", error="No success confirmation shown after applying")
 
     except Exception as e:
         logger.error("Error applying to %s: %s", listing.title, e)

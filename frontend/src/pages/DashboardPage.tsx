@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Square, ArrowLeft, ExternalLink, TrendingUp, CheckCircle2, XCircle, AlertCircle, Clock } from "lucide-react";
 import { api } from "../api/client";
@@ -90,16 +90,27 @@ function Skills({ items, color }: { items?: string[]; color: string }) {
 function JobRow({ job, isNew }: { job: JobEntry; isNew: boolean }) {
   const initials = (job.company || "?").slice(0, 2).toUpperCase();
   const hue = ((job.company.charCodeAt(0) || 65) * 47) % 360;
+  const [imgError, setImgError] = React.useState(false);
+  const showLogo = job.logo_url && !imgError;
 
   return (
     <div className={`px-5 py-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors
                      ${isNew ? "bg-indigo-50/30" : ""}`}>
       <div className="flex items-start gap-4">
-        {/* Company avatar */}
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-             style={{ backgroundColor: `hsl(${hue},55%,55%)` }}>
-          {initials}
-        </div>
+        {/* Company avatar — real logo if available, else initials */}
+        {showLogo ? (
+          <img
+            src={job.logo_url}
+            alt={job.company}
+            onError={() => setImgError(true)}
+            className="w-9 h-9 rounded-xl object-contain bg-white border border-slate-100 shrink-0"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+               style={{ backgroundColor: `hsl(${hue},55%,55%)` }}>
+            {initials}
+          </div>
+        )}
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
@@ -185,7 +196,15 @@ export default function DashboardPage() {
 
   const navigate     = useNavigate();
   const isRunning    = useSessionStore((s) => s.isRunning);
+  const setRunning   = useSessionStore((s) => s.setRunning);
   const loginStatus  = useSessionStore((s) => s.loginStatus);
+
+  // Sync running state from backend on mount (handles page refresh)
+  useEffect(() => {
+    api.get<{ is_running: boolean; session_id: number | null }>("/api/session/status")
+      .then((r) => { if (r.data.is_running) setRunning(true, r.data.session_id); })
+      .catch(() => {});
+  }, [setRunning]);
   const jobs         = useSessionStore((s) => s.jobs);
   const appliedCount = useSessionStore((s) => s.appliedCount);
   const target       = useSessionStore((s) => s.target);

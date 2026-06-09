@@ -16,6 +16,7 @@ export interface JobEntry {
   external_url?: string;
   exp_required?: string;
   salary?: string;
+  logo_url?: string;
 }
 
 export interface LogEntry {
@@ -101,7 +102,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         }
 
         case "job_details": {
-          return updateLastJob(state, { exp_required: event.exp_required, salary: event.salary });
+          return updateLastJob(state, { exp_required: event.exp_required, salary: event.salary, logo_url: event.logo_url });
         }
 
         case "llm_score": {

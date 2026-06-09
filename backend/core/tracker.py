@@ -42,7 +42,7 @@ def init_tracker(log_dir: str) -> logging.Logger:
     logger.propagate = False
     logger.handlers.clear()
 
-    fh = logging.FileHandler(log_file, encoding="utf-8")
+    fh = logging.FileHandler(log_file, mode='w', encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-8s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(fh)
@@ -138,7 +138,8 @@ def job_details_fetched(details) -> None:
            "exp_required": details.experience_required,
            "salary": details.salary,
            "posted_date": details.posted_date,
-           "applicants": details.applicants_count})
+           "applicants": details.applicants_count,
+           "logo_url": details.company_logo_url or ""})
 
 
 def job_details_failed(url: str, err: Exception) -> None:

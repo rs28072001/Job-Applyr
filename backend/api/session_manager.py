@@ -3,7 +3,6 @@ Manages the single active job-search session.
 Runs the blocking Selenium code in a ThreadPoolExecutor thread so FastAPI
 stays responsive. Exposes start() / stop() / status.
 """
-import asyncio
 import logging
 import threading
 import traceback
@@ -21,6 +20,7 @@ _stop_event:  Optional[threading.Event]  = None
 _session_id:  Optional[int]              = None
 _started_at:  Optional[datetime]         = None
 _is_running:  bool                       = False
+_driver:      Optional[object]            = None  # Selenium WebDriver
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,9 +50,7 @@ def start(session_id: int, run_kwargs: dict) -> None:
         _started_at = datetime.now(timezone.utc)
         _is_running = True
 
-    loop = asyncio.get_running_loop()
-    future = loop.run_in_executor(
-        _executor,
+    future = _executor.submit(
         _run_session_sync,
         session_id,
         run_kwargs,
@@ -62,10 +60,17 @@ def start(session_id: int, run_kwargs: dict) -> None:
 
 
 def stop() -> None:
-    """Signal the running session to stop after the current job."""
+    """Signal the running session to stop and close Chrome driver."""
+    global _driver, _stop_event
     with _lock:
         if _stop_event:
             _stop_event.set()
+        if _driver:
+            try:
+                _driver.quit()
+            except Exception:
+                pass
+            _driver = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,9 +78,10 @@ def stop() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _on_done(future) -> None:
-    global _is_running
+    global _is_running, _driver
     with _lock:
         _is_running = False
+        _driver = None
     exc = future.exception()
     if exc:
         logger.error("Session thread raised: %s\n%s", exc,
@@ -105,7 +111,6 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
     from platforms.linkedin.platform import LinkedInPlatform
     from utils.rate_limiter import RateLimiter
     from platforms.base_platform import LoginError, JobDetails
-    from core.session_logger import is_already_applied
 
     db = SessionLocal()
     try:
@@ -159,6 +164,7 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
 
         keywords = db_sess.keywords or cv_data.job_titles or ["Software Engineer"]
 
+        logger.info("Session %s: Initializing tracker", session_id)
         # Init tracker (file log)
         import pathlib
         pathlib.Path("./logs").mkdir(parents=True, exist_ok=True)
@@ -167,10 +173,16 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
         if cv_data.raw_text:
             tracker.cv_parsed(cv_data)
 
+        logger.info("Session %s: Connecting to Chrome", session_id)
         # Connect Chrome
+        global _driver
         try:
             driver = ensure_chrome_running(cfg.port_num, cfg.chrome_user_data_dir)
+            with _lock:
+                _driver = driver
+            logger.info("Session %s: Chrome connected successfully", session_id)
         except (ChromeNotFoundError, ChromeAttachError) as e:
+            logger.error("Session %s: Chrome connection failed: %s", session_id, e)
             tracker.get().error("[CHROME] Failed to connect: %s", e)
             tracker._emit({"type": "error", "msg": f"Chrome error: {e}"})
             db_sess.status = "failed"
@@ -178,17 +190,26 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             db.commit()
             return
 
-        llm = LLMClient(cfg.azure_openai_endpoint, cfg.azure_openai_api_key,
-                        cv_data, cfg.azure_deployment_name)
         rate_limiter = RateLimiter(max_per_hour=cfg.max_jobs_per_hour,
                                    max_per_day=cfg.max_jobs_per_day)
 
-        # Determine platforms
+        # Determine platforms and check login BEFORE LLM initialization
         platforms_to_run = []
         if cfg.platform_choice in ("naukri", "both"):
             platforms_to_run.append(("naukri",   NaukriPlatform(driver, cfg, rate_limiter)))
         if cfg.platform_choice in ("linkedin", "both"):
             platforms_to_run.append(("linkedin", LinkedInPlatform(driver, cfg, rate_limiter)))
+
+        # Check login for each platform before proceeding
+        for platform_name, platform in platforms_to_run:
+            logger.info("Session %s: Checking login for %s", session_id, platform_name)
+            platform.ensure_logged_in()
+            logger.info("Session %s: %s login verified", session_id, platform_name)
+
+        logger.info("Session %s: Initializing LLM client", session_id)
+        llm = LLMClient(cfg.azure_openai_endpoint, cfg.azure_openai_api_key,
+                        cv_data, cfg.azure_deployment_name)
+        logger.info("Session %s: LLM client initialized", session_id)
 
         applied_count = [0]
         mode   = kwargs.get("mode", db_sess.mode)
@@ -292,6 +313,10 @@ def _run_platform_db(
         except Exception as e:
             tracker.job_details_failed(listing.url, e)
 
+        # Check stop before LLM call
+        if stop_event.is_set():
+            break
+
         # LLM score
         try:
             score = llm.score_job(details.job_description)
@@ -307,6 +332,10 @@ def _run_platform_db(
                              matched_skills=score.matched_skills,
                              missing_skills=score.missing_skills,
                              recommendation="apply")
+
+        # Check stop before apply
+        if stop_event.is_set():
+            break
 
         # Apply decision
         if score.score >= threshold or not cv_data.raw_text:

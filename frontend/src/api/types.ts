@@ -92,7 +92,7 @@ export type WSEvent =
   | { type: "search"; platform: string; keywords: string[]; count: number }
   | { type: "job_start"; idx: number; total: number; title: string; company: string; url: string }
   | { type: "job_skip"; reason: string; title: string }
-  | { type: "job_details"; exp_required: string; salary: string; posted_date: string; applicants: string }
+  | { type: "job_details"; exp_required: string; salary: string; posted_date: string; applicants: string; logo_url: string }
   | { type: "llm_score"; score: number; threshold: number; rationale: string; recommendation: string; matched: string[]; missing: string[] }
   | { type: "apply_start"; title: string; company: string }
   | { type: "apply_result"; status: string; title: string; external_url: string; error: string }

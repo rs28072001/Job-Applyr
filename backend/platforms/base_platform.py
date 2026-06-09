@@ -68,6 +68,5 @@ class BasePlatform(ABC):
         pass
 
     def ensure_logged_in(self) -> None:
-        # Skip login check - assume user is already logged in
-        self.login()
-        return
+        if not self.check_login():
+            self.login()
