@@ -20,8 +20,11 @@ class ConfigRead(BaseModel):
     openai_model          : str = "gpt-4o-mini"
     gemini_api_key        : str = ""   # masked to "***" by route
     gemini_model          : str = "gemini-2.5-flash"
-    grok_api_key          : str = ""   # masked to "***" by route
-    grok_model            : str = "grok-3-mini"
+    groq_api_key          : str = ""   # masked to "***" by route
+    groq_model            : str = "openai/gpt-oss-120b"
+    openrouter_api_key    : str = ""   # masked to "***" by route
+    openrouter_model      : str = "openai/gpt-oss-120b"
+    openrouter_base_url   : str = "https://openrouter.ai/api/v1"
     confidence_threshold  : int = 75
     port_num              : int = 9222
     max_jobs_per_hour     : int = 30
@@ -45,12 +48,27 @@ class ConfigUpdate(BaseModel):
     openai_model          : Optional[str] = None
     gemini_api_key        : Optional[str] = None
     gemini_model          : Optional[str] = None
-    grok_api_key          : Optional[str] = None
-    grok_model            : Optional[str] = None
+    groq_api_key          : Optional[str] = None
+    groq_model            : Optional[str] = None
+    openrouter_api_key    : Optional[str] = None
+    openrouter_model      : Optional[str] = None
+    openrouter_base_url   : Optional[str] = None
     confidence_threshold  : Optional[int] = Field(None, ge=0, le=100)
     port_num              : Optional[int] = None
     max_jobs_per_hour     : Optional[int] = None
     max_jobs_per_day      : Optional[int] = None
+
+
+class ConfigTestRequest(ConfigUpdate):
+    pass
+
+
+class ConfigTestResponse(BaseModel):
+    ok        : bool
+    provider  : str
+    model     : str
+    output    : str = ""
+    error     : str = ""
 
 
 # ── CV Profile ────────────────────────────────────────────────────────────────

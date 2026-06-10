@@ -42,7 +42,7 @@ An automated job application assistant that searches and applies to jobs on Nauk
    CONFIDENCE_THRESHOLD=75
    PORT_NUM=9222
    CHROME_USER_DATA_DIR=./chrome_profile
-   CV_PATH=./cv/Bhawana_CV.pdf
+   CV_PATH=./cv/resume.pdf
    LOG_PATH=./logs/applications.json
    MAX_JOBS_PER_HOUR=30
    MAX_JOBS_PER_DAY=150

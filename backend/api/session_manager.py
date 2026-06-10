@@ -4,6 +4,7 @@ Runs the blocking Selenium code in a ThreadPoolExecutor thread so FastAPI
 stays responsive. Exposes start() / stop() / status.
 """
 import logging
+import hashlib
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -61,8 +62,10 @@ def start(session_id: int, run_kwargs: dict) -> None:
 
 def stop() -> None:
     """Signal the running session to stop and close Chrome driver."""
-    global _driver, _stop_event
+    global _driver, _stop_event, _is_running, _session_id, _started_at
+    session_id = None
     with _lock:
+        session_id = _session_id
         if _stop_event:
             _stop_event.set()
         if _driver:
@@ -71,6 +74,25 @@ def stop() -> None:
             except Exception:
                 pass
             _driver = None
+        _is_running = False
+        _session_id = None
+        _started_at = None
+
+    if session_id:
+        try:
+            from api.database import SessionLocal
+            from api.models import Session as SessionModel
+            db = SessionLocal()
+            try:
+                db_sess = db.get(SessionModel, session_id)
+                if db_sess and db_sess.status == "running":
+                    db_sess.status = "stopped"
+                    db_sess.ended_at = datetime.now(timezone.utc)
+                    db.commit()
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("Failed to mark session %s stopped immediately", session_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,7 +127,7 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
     from config.settings import Config
     from core.chrome_manager import ensure_chrome_running, ChromeNotFoundError, ChromeAttachError
     from core.cv_parser import CVData
-    from core.llm_provider import get_llm_settings
+    from core.llm_provider import get_llm_settings, validate_llm_settings
     from core.llm_client import LLMClient
     import core.tracker as tracker
     from platforms.naukri.platform import NaukriPlatform
@@ -123,6 +145,14 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             logger.error("Session %s: missing config or session row", session_id)
             return
 
+        def app_chrome_profile_dir() -> str:
+            override = os.getenv("CHROME_USER_DATA_DIR", "").strip()
+            if override:
+                return override if os.path.isabs(override) else os.path.join(backend_dir, override)
+            identity = (db_cfg.naukri_email or db_cfg.linkedin_email or "no-platform-account").strip().lower()
+            digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+            return os.path.join(backend_dir, "data", "chrome_profiles", digest)
+
         # Build stdlib Config dataclass from DB row
         cfg = Config(
             naukri_userid       = db_cfg.naukri_email,
@@ -137,11 +167,14 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             openai_model        = db_cfg.openai_model or "gpt-4o-mini",
             gemini_api_key      = db_cfg.gemini_api_key or "",
             gemini_model        = db_cfg.gemini_model or "gemini-2.5-flash",
-            grok_api_key        = db_cfg.grok_api_key or "",
-            grok_model          = db_cfg.grok_model or "grok-3-mini",
+            groq_api_key        = db_cfg.groq_api_key or "",
+            groq_model          = db_cfg.groq_model or "openai/gpt-oss-120b",
+            openrouter_api_key  = db_cfg.openrouter_api_key or "",
+            openrouter_model    = db_cfg.openrouter_model or "openai/gpt-oss-120b",
+            openrouter_base_url = db_cfg.openrouter_base_url or "https://openrouter.ai/api/v1",
             confidence_threshold= kwargs.get("confidence_threshold", db_cfg.confidence_threshold),
             port_num            = db_cfg.port_num,
-            chrome_user_data_dir= os.getenv("CHROME_USER_DATA_DIR", "./chrome_profile"),
+            chrome_user_data_dir= app_chrome_profile_dir(),
             cv_path             = db_cv.pdf_path if db_cv else "",
             log_path            = "./logs/applications.json",
             max_jobs_per_hour   = db_cfg.max_jobs_per_hour,
@@ -208,14 +241,9 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
         if cfg.platform_choice in ("linkedin", "both"):
             platforms_to_run.append(("linkedin", LinkedInPlatform(driver, cfg, rate_limiter)))
 
-        # Check login for each platform before proceeding
-        for platform_name, platform in platforms_to_run:
-            logger.info("Session %s: Checking login for %s", session_id, platform_name)
-            platform.ensure_logged_in()
-            logger.info("Session %s: %s login verified", session_id, platform_name)
-
         logger.info("Session %s: Initializing LLM client", session_id)
         llm_settings = get_llm_settings(cfg)
+        validate_llm_settings(llm_settings)
         llm = LLMClient(llm_settings.base_url, llm_settings.api_key,
                         cv_data, llm_settings.model)
         logger.info("Session %s: LLM client initialized", session_id)

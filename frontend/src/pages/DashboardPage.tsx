@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Square, ArrowLeft, ExternalLink, TrendingUp, CheckCircle2, XCircle, AlertCircle, Clock } from "lucide-react";
 import { api } from "../api/client";
@@ -198,11 +198,15 @@ export default function DashboardPage() {
   const isRunning    = useSessionStore((s) => s.isRunning);
   const setRunning   = useSessionStore((s) => s.setRunning);
   const loginStatus  = useSessionStore((s) => s.loginStatus);
+  const [stopping, setStopping] = useState(false);
 
   // Sync running state from backend on mount (handles page refresh)
   useEffect(() => {
-    api.get<{ is_running: boolean; session_id: number | null }>("/api/session/status")
-      .then((r) => { if (r.data.is_running) setRunning(true, r.data.session_id); })
+    fetch("/api/session/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { is_running: boolean; session_id: number | null } | null) => {
+        if (data?.is_running) setRunning(true, data.session_id);
+      })
       .catch(() => {});
   }, [setRunning]);
   const jobs         = useSessionStore((s) => s.jobs);
@@ -245,10 +249,20 @@ export default function DashboardPage() {
           </div>
         </div>
         {isRunning && (
-          <button onClick={() => api.post("/api/session/stop")}
+          <button onClick={async () => {
+              setStopping(true);
+              try {
+                await api.post("/api/session/stop");
+                setRunning(false, null);
+              } finally {
+                setStopping(false);
+              }
+            }}
+            disabled={stopping}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700
+                       disabled:opacity-60 disabled:hover:bg-red-600
                        text-white text-sm font-semibold rounded-xl shadow-sm shadow-red-200">
-            <Square className="w-3.5 h-3.5" /> Stop session
+            <Square className="w-3.5 h-3.5" /> {stopping ? "Stopping..." : "Stop session"}
           </button>
         )}
       </div>

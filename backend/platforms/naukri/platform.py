@@ -4,7 +4,7 @@ from . import login, search, job_scraper, apply
 
 class NaukriPlatform(BasePlatform):
     def check_login(self) -> bool:
-        return login.check_login(self.driver)
+        return login.check_login(self.driver, self.config.naukri_userid)
 
     def login(self) -> None:
         login.login(self.driver, self.config.naukri_userid, self.config.naukri_password)

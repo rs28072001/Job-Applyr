@@ -8,13 +8,16 @@ export interface AppConfig {
   azure_openai_endpoint: string;
   azure_openai_api_key: string;  // "***" when set
   azure_deployment_name: string;
-  ai_provider: "azure" | "openai" | "gemini" | "grok";
+  ai_provider: "azure" | "openai" | "gemini" | "groq" | "openrouter";
   openai_api_key: string;        // "***" when set
   openai_model: string;
   gemini_api_key: string;        // "***" when set
   gemini_model: string;
-  grok_api_key: string;          // "***" when set
-  grok_model: string;
+  groq_api_key: string;          // "***" when set
+  groq_model: string;
+  openrouter_api_key: string;    // "***" when set
+  openrouter_model: string;
+  openrouter_base_url: string;
   confidence_threshold: number;
   port_num: number;
   max_jobs_per_hour: number;

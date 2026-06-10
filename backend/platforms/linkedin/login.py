@@ -6,7 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
 from ..base_platform import LoginError
-from ...utils.rate_limiter import RateLimiter
+from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 

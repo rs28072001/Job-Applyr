@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import {
   Upload, CheckCircle2, AlertCircle, Loader2, Play, Settings2,
   MapPin, Target, Sliders, User, Mail, Phone,
-  Briefcase, Star, Save, ChevronDown, Key, Cpu, Globe,
+  Briefcase, Star, Save, ChevronDown, Key, Cpu,
 } from "lucide-react";
 import { api } from "../api/client";
 import type { AppConfig, CVProfile, SessionStartRequest } from "../api/types";
@@ -42,6 +42,24 @@ function Label({ children, required }: { children: React.ReactNode; required?: b
 const inputCls = `w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm
   focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
   hover:border-slate-300 bg-slate-50 text-slate-900 placeholder-slate-400`;
+
+const SECRET_MASK = "***";
+const SECRET_FIELDS = [
+  "naukri_password",
+  "linkedin_password",
+  "azure_openai_api_key",
+  "openai_api_key",
+  "gemini_api_key",
+  "groq_api_key",
+  "openrouter_api_key",
+];
+
+const AI_PROVIDER_OPTIONS = [
+  { value: "openai", label: "OpenAI", key: "openai_api_key", model: "openai_model", modelPlaceholder: "gpt-4o-mini" },
+  { value: "gemini", label: "Gemini", key: "gemini_api_key", model: "gemini_model", modelPlaceholder: "gemini-2.5-flash" },
+  { value: "groq", label: "Groq", key: "groq_api_key", model: "groq_model", modelPlaceholder: "openai/gpt-oss-120b" },
+  { value: "openrouter", label: "OpenRouter", key: "openrouter_api_key", model: "openrouter_model", modelPlaceholder: "openai/gpt-oss-120b" },
+] as const;
 
 /* ── CV Upload Zone ──────────────────────────────────────────────────────── */
 
@@ -159,9 +177,11 @@ function SettingsAccordion() {
   const [open, setOpen]     = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [cfg, setCfg]       = useState({ naukri_email:"", naukri_password:"",
                                           linkedin_email:"", linkedin_password:"",
-                                          ai_provider:"azure" as AppConfig["ai_provider"],
+                                          ai_provider:"groq" as AppConfig["ai_provider"],
                                           azure_openai_endpoint:"",
                                           azure_openai_api_key:"",
                                           azure_deployment_name:"gpt-4o-mini",
@@ -169,51 +189,88 @@ function SettingsAccordion() {
                                           openai_model:"gpt-4o-mini",
                                           gemini_api_key:"",
                                           gemini_model:"gemini-2.5-flash",
-                                          grok_api_key:"",
-                                          grok_model:"grok-3-mini",
+                                          groq_api_key:"",
+                                          groq_model:"openai/gpt-oss-120b",
+                                          openrouter_api_key:"",
+                                          openrouter_model:"openai/gpt-oss-120b",
+                                          openrouter_base_url:"https://openrouter.ai/api/v1",
                                           confidence_threshold:75, max_jobs_per_hour:30 });
 
   useEffect(() => {
     if (!open) return;
     api.get<AppConfig>("/api/config").then((r) => {
+      const provider = String(r.data.ai_provider || "groq");
       setCfg({
         naukri_email: r.data.naukri_email || "",
-        naukri_password: r.data.naukri_password === "***" ? "" : (r.data.naukri_password || ""),
+        naukri_password: r.data.naukri_password || "",
         linkedin_email: r.data.linkedin_email || "",
-        linkedin_password: r.data.linkedin_password === "***" ? "" : (r.data.linkedin_password || ""),
-        ai_provider: r.data.ai_provider || "azure",
+        linkedin_password: r.data.linkedin_password || "",
+        ai_provider: (provider === "grok" ? "groq" : provider === "azure" ? "openai" : provider) as AppConfig["ai_provider"],
         azure_openai_endpoint: r.data.azure_openai_endpoint || "",
-        azure_openai_api_key: r.data.azure_openai_api_key === "***" ? "" : (r.data.azure_openai_api_key || ""),
+        azure_openai_api_key: r.data.azure_openai_api_key || "",
         azure_deployment_name: r.data.azure_deployment_name || "gpt-4o-mini",
-        openai_api_key: r.data.openai_api_key === "***" ? "" : (r.data.openai_api_key || ""),
+        openai_api_key: r.data.openai_api_key || "",
         openai_model: r.data.openai_model || "gpt-4o-mini",
-        gemini_api_key: r.data.gemini_api_key === "***" ? "" : (r.data.gemini_api_key || ""),
+        gemini_api_key: r.data.gemini_api_key || "",
         gemini_model: r.data.gemini_model || "gemini-2.5-flash",
-        grok_api_key: r.data.grok_api_key === "***" ? "" : (r.data.grok_api_key || ""),
-        grok_model: r.data.grok_model || "grok-3-mini",
+        groq_api_key: r.data.groq_api_key || "",
+        groq_model: r.data.groq_model || "openai/gpt-oss-120b",
+        openrouter_api_key: r.data.openrouter_api_key || "",
+        openrouter_model: r.data.openrouter_model || "openai/gpt-oss-120b",
+        openrouter_base_url: r.data.openrouter_base_url || "https://openrouter.ai/api/v1",
         confidence_threshold: r.data.confidence_threshold,
         max_jobs_per_hour: r.data.max_jobs_per_hour,
       });
     });
   }, [open]);
 
+  function buildConfigPayload() {
+    const payload: Record<string, unknown> = { ...cfg };
+    SECRET_FIELDS.forEach((key) => {
+      if (!payload[key] || payload[key] === SECRET_MASK) delete payload[key];
+    });
+    return payload;
+  }
+
   async function save() {
     setSaving(true);
-    const payload: Record<string, unknown> = { ...cfg };
-    [
-      "naukri_password",
-      "linkedin_password",
-      "azure_openai_api_key",
-      "openai_api_key",
-      "gemini_api_key",
-      "grok_api_key",
-    ].forEach((key) => {
-      if (!payload[key]) delete payload[key];
-    });
+    const payload = buildConfigPayload();
     await api.put("/api/config", payload);
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
+
+  async function testConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const payload: Record<string, unknown> = { ...cfg };
+      SECRET_FIELDS.forEach((key) => {
+        if (!payload[key]) delete payload[key];
+      });
+      const r = await api.post<{ ok: boolean; provider: string; model: string; output: string }>("/api/config/test", payload, {
+        timeout: 60_000,
+      });
+      setTestResult({
+        ok: true,
+        message: `${r.data.provider} / ${r.data.model}: ${r.data.output || "Connection ok"}`,
+      });
+    } catch (e: any) {
+      const detail = e.response?.data?.detail;
+      const provider = detail?.provider ? `${detail.provider}${detail.model ? ` / ${detail.model}` : ""}: ` : "";
+      const error = typeof detail === "string" ? detail : detail?.error;
+      setTestResult({
+        ok: false,
+        message: `${provider}${error || e.message || "Connection test failed"}`,
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const activeProvider = AI_PROVIDER_OPTIONS.find((provider) => provider.value === cfg.ai_provider) ?? AI_PROVIDER_OPTIONS[0];
+  const activeKey = (cfg as any)[activeProvider.key] || "";
+  const activeModel = (cfg as any)[activeProvider.model] || "";
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -236,53 +293,54 @@ function SettingsAccordion() {
               <Key className="w-4 h-4 text-indigo-600" />
               <p className="text-sm font-semibold text-slate-900">AI Provider Keys</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Active AI Provider</Label>
+                <Label>Provider</Label>
                 <select
                   value={cfg.ai_provider}
-                  onChange={(e) => setCfg({ ...cfg, ai_provider: e.target.value as AppConfig["ai_provider"] })}
+                  onChange={(e) => {
+                    setTestResult(null);
+                    setCfg({ ...cfg, ai_provider: e.target.value as AppConfig["ai_provider"] });
+                  }}
                   className={inputCls}
                 >
-                  <option value="azure">Azure OpenAI</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="grok">Grok</option>
+                  {AI_PROVIDER_OPTIONS.map((provider) => (
+                    <option key={provider.value} value={provider.value}>{provider.label}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <Label>Azure Endpoint</Label>
+                <Label>API Key</Label>
                 <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input value={cfg.azure_openai_endpoint}
-                    onChange={(e) => setCfg({ ...cfg, azure_openai_endpoint: e.target.value })}
-                    placeholder="https://your-resource.openai.azure.com/openai/v1/"
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="password"
+                    value={activeKey}
+                    placeholder="Paste key to update"
+                    onFocus={() => {
+                      if (activeKey === SECRET_MASK) {
+                        setCfg({ ...cfg, [activeProvider.key]: "" });
+                      }
+                    }}
+                    onChange={(e) => setCfg({ ...cfg, [activeProvider.key]: e.target.value })}
+                    className={`${inputCls} pl-8`} />
+                </div>
+                {activeKey === SECRET_MASK && (
+                  <p className="mt-1 text-[11px] text-emerald-600">Saved. Paste a new key only if you want to replace it.</p>
+                )}
+              </div>
+              <div>
+                <Label>Model Name</Label>
+                <div className="relative">
+                  <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={activeModel}
+                    placeholder={activeProvider.modelPlaceholder}
+                    onChange={(e) => setCfg({ ...cfg, [activeProvider.model]: e.target.value })}
                     className={`${inputCls} pl-8`} />
                 </div>
               </div>
-              {[
-                { label:"Azure API Key",  k:"azure_openai_api_key", type:"password" },
-                { label:"Azure Deployment", k:"azure_deployment_name", type:"text" },
-                { label:"OpenAI API Key", k:"openai_api_key", type:"password" },
-                { label:"OpenAI Model",   k:"openai_model", type:"text" },
-                { label:"Gemini API Key", k:"gemini_api_key", type:"password" },
-                { label:"Gemini Model",   k:"gemini_model", type:"text" },
-                { label:"Grok API Key",   k:"grok_api_key", type:"password" },
-                { label:"Grok Model",     k:"grok_model", type:"text" },
-              ].map(({ label, k, type }) => (
-                <div key={k}>
-                  <Label>{label}</Label>
-                  <div className="relative">
-                    {type === "password"
-                      ? <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                      : <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />}
-                    <input type={type} value={(cfg as any)[k]}
-                      placeholder={type === "password" ? "Paste key to update" : ""}
-                      onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })}
-                      className={`${inputCls} pl-8`} />
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -300,8 +358,16 @@ function SettingsAccordion() {
               <div key={k}>
                 <Label>{label}</Label>
                 <input type={type} value={(cfg as any)[k]} placeholder={type === "password" ? "••••••••" : ""}
+                  onFocus={() => {
+                    if (type === "password" && (cfg as any)[k] === SECRET_MASK) {
+                      setCfg({ ...cfg, [k]: "" });
+                    }
+                  }}
                   onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })}
                   className={inputCls} />
+                {type === "password" && (cfg as any)[k] === SECRET_MASK && (
+                  <p className="mt-1 text-[11px] text-emerald-600">Saved. Paste a new password only if you want to replace it.</p>
+                )}
               </div>
             ))}
             <div>
@@ -320,12 +386,32 @@ function SettingsAccordion() {
             </div>
           </div>
           </div>
-          <button onClick={save} disabled={saving}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700
-                       disabled:opacity-50 text-white text-sm font-semibold rounded-xl">
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-            {saved ? "Saved ✓" : saving ? "Saving…" : "Save settings"}
-          </button>
+          {testResult && (
+            <p className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs ${
+              testResult.ok
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}>
+              {testResult.ok
+                ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                : <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+              <span>{testResult.message}</span>
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3">
+            <button onClick={testConnection} disabled={testing}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700
+                         disabled:opacity-50 text-white text-sm font-semibold rounded-xl">
+              {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cpu className="w-3.5 h-3.5" />}
+              {testing ? "Testing…" : "Test connection"}
+            </button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700
+                         disabled:opacity-50 text-white text-sm font-semibold rounded-xl">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saved ? "Saved ✓" : saving ? "Saving…" : "Save settings"}
+            </button>
+          </div>
         </div>
       )}
     </div>

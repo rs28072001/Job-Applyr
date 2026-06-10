@@ -7,7 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from ..base_platform import JobListing, ApplicationResult
-from ...utils.rate_limiter import RateLimiter
+from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,26 @@ SEL_RADIO_INPUTS    = "li[class*='userItem'] input[type='radio']"
 SEL_TEXT_INPUT      = "div[id*='userInput'][contenteditable='true'], div[class*='textArea'][contenteditable='true']"
 SEL_SAVE_BTN        = "div.sendMsg, div[id*='sendMsg'] div.sendMsg"
 SEL_CHAT_CLOSE      = "div[class*='crossIcon'], div[class*='closeIcon']"
+
+
+def _page_requires_login(driver) -> bool:
+    try:
+        current = driver.current_url.lower()
+        if "nlogin" in current or "/login" in current:
+            return True
+        text = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
+        text = text.lower()
+        return any(
+            phrase in text
+            for phrase in (
+                "login to apply",
+                "register to apply",
+                "login to view",
+                "register to unlock",
+            )
+        )
+    except Exception:
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,6 +346,10 @@ def apply_to_job(
         driver.get(listing.url)
         rate_limiter.wait_page_load()
 
+    if _page_requires_login(driver):
+        logger.warning("Naukri job page requires login before apply: %s", listing.title)
+        return ApplicationResult(success=False, status="error", error="Not logged in — job page shows login/register to apply")
+
     # Check if already applied
     try:
         driver.find_element(By.CSS_SELECTOR, SEL_ALREADY_APPLIED)
@@ -370,8 +394,7 @@ def apply_to_job(
         rate_limiter.wait_page_load()
 
         # Detect redirect to login page — means session expired / not logged in
-        current = driver.current_url.lower()
-        if "nlogin" in current or "/login" in current:
+        if _page_requires_login(driver):
             logger.warning("Redirected to login page after apply — not logged in: %s", listing.title)
             return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
 
@@ -397,8 +420,7 @@ def apply_to_job(
             return ApplicationResult(success=True, status="applied")
         except TimeoutException:
             # Check once more if redirected to login
-            current = driver.current_url.lower()
-            if "nlogin" in current or "/login" in current:
+            if _page_requires_login(driver):
                 return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
             logger.warning("No success indicator after apply — marking as error: %s", listing.title)
             return ApplicationResult(success=False, status="error", error="No success confirmation shown after applying")

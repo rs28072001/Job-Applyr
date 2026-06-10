@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Briefcase, Settings, LayoutDashboard, History, LogOut, ChevronRight } from "lucide-react";
+import { NavLink, Outlet } from "react-router-dom";
+import { Briefcase, Settings, LayoutDashboard, History, ChevronRight } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useSessionStore } from "../../store/sessionStore";
 
@@ -27,16 +27,9 @@ function Avatar({ name, email }: { name: string; email: string }) {
 }
 
 export default function AppShell() {
-  const navigate    = useNavigate();
-  const logout      = useAuthStore((s) => s.logout);
   const email       = useAuthStore((s) => s.email) ?? "";
   const fullName    = useAuthStore((s) => s.fullName) ?? "";
   const isRunning   = useSessionStore((s) => s.isRunning);
-
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -95,14 +88,9 @@ export default function AppShell() {
                           cursor-default group">
             <Avatar name={fullName} email={email} />
             <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-medium truncate">{fullName || "User"}</p>
-              <p className="text-slate-500 text-xs truncate">{email}</p>
+              <p className="text-white text-xs font-medium truncate">{fullName || "Local User"}</p>
+              <p className="text-slate-500 text-xs truncate">{email || "No login required"}</p>
             </div>
-            <button onClick={handleLogout} title="Sign out"
-              className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400
-                         p-1 rounded transition-all">
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </aside>

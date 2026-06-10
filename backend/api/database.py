@@ -30,8 +30,11 @@ _CONFIG_COLUMN_DEFAULTS = {
     "openai_model": "'gpt-4o-mini'",
     "gemini_api_key": "''",
     "gemini_model": "'gemini-2.5-flash'",
-    "grok_api_key": "''",
-    "grok_model": "'grok-3-mini'",
+    "groq_api_key": "''",
+    "groq_model": "'openai/gpt-oss-120b'",
+    "openrouter_api_key": "''",
+    "openrouter_model": "'openai/gpt-oss-120b'",
+    "openrouter_base_url": "'https://openrouter.ai/api/v1'",
 }
 
 
@@ -60,6 +63,11 @@ def init_db() -> None:
             for name, default in _CONFIG_COLUMN_DEFAULTS.items():
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE config ADD COLUMN {name} VARCHAR DEFAULT {default}"))
+            if "grok_api_key" in existing and "groq_api_key" not in existing:
+                conn.execute(text("UPDATE config SET groq_api_key = COALESCE(NULLIF(grok_api_key, ''), groq_api_key)"))
+            if "grok_model" in existing and "groq_model" not in existing:
+                conn.execute(text("UPDATE config SET groq_model = COALESCE(NULLIF(grok_model, ''), groq_model)"))
+            conn.execute(text("UPDATE config SET ai_provider = 'groq' WHERE ai_provider = 'grok'"))
 
     db = SessionLocal()
     try:

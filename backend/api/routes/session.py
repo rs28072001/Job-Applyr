@@ -6,7 +6,7 @@ from api.auth import get_current_user
 from api.database import get_db
 from api.models import Session as SessionModel, CVProfile, Config as ConfigModel, User
 from api.schemas import SessionStartRequest, SessionStatus
-from core.llm_provider import is_llm_configured
+from core.llm_provider import get_llm_settings, is_llm_configured, validate_llm_settings, LLMConfigError
 import api.session_manager as sm
 
 router = APIRouter()
@@ -21,6 +21,10 @@ def start_session(body: SessionStartRequest, db: DBSession = Depends(get_db), _:
     cfg = db.get(ConfigModel, 1)
     if not cfg or not is_llm_configured(cfg):
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
+    try:
+        validate_llm_settings(get_llm_settings(cfg))
+    except LLMConfigError as e:
+        raise HTTPException(400, str(e))
 
     # Resolve keywords: from request or from active CV profile
     keywords = body.keywords
