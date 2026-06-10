@@ -1,5 +1,5 @@
-from platforms.base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult
-from platforms.linkedin import login, search, job_scraper, apply
+from ..base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult
+from . import login, search, job_scraper, apply
 
 
 class LinkedInPlatform(BasePlatform):

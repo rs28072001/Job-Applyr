@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from openai import OpenAI, RateLimitError, APIError
 
-from core.cv_parser import CVData
+from .cv_parser import CVData
 
 
 @dataclass

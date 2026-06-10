@@ -7,8 +7,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 
-from platforms.base_platform import JobListing, ApplicationResult
-from utils.rate_limiter import RateLimiter
+from ..base_platform import JobListing, ApplicationResult
+from ...utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 

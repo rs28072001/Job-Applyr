@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import api.event_queue as eq
 from api.database import init_db
-import core.tracker as tracker
+from core import tracker
 
 logger = logging.getLogger(__name__)
 
