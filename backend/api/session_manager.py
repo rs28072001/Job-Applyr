@@ -105,6 +105,7 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
     from config.settings import Config
     from core.chrome_manager import ensure_chrome_running, ChromeNotFoundError, ChromeAttachError
     from core.cv_parser import CVData
+    from core.llm_provider import get_llm_settings
     from core.llm_client import LLMClient
     import core.tracker as tracker
     from platforms.naukri.platform import NaukriPlatform
@@ -131,6 +132,13 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             azure_openai_endpoint    = db_cfg.azure_openai_endpoint,
             azure_openai_api_key     = db_cfg.azure_openai_api_key,
             azure_deployment_name    = db_cfg.azure_deployment_name or "gpt-4o-mini",
+            ai_provider         = db_cfg.ai_provider or "azure",
+            openai_api_key      = db_cfg.openai_api_key or "",
+            openai_model        = db_cfg.openai_model or "gpt-4o-mini",
+            gemini_api_key      = db_cfg.gemini_api_key or "",
+            gemini_model        = db_cfg.gemini_model or "gemini-2.5-flash",
+            grok_api_key        = db_cfg.grok_api_key or "",
+            grok_model          = db_cfg.grok_model or "grok-3-mini",
             confidence_threshold= kwargs.get("confidence_threshold", db_cfg.confidence_threshold),
             port_num            = db_cfg.port_num,
             chrome_user_data_dir= os.getenv("CHROME_USER_DATA_DIR", "./chrome_profile"),
@@ -207,8 +215,9 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             logger.info("Session %s: %s login verified", session_id, platform_name)
 
         logger.info("Session %s: Initializing LLM client", session_id)
-        llm = LLMClient(cfg.azure_openai_endpoint, cfg.azure_openai_api_key,
-                        cv_data, cfg.azure_deployment_name)
+        llm_settings = get_llm_settings(cfg)
+        llm = LLMClient(llm_settings.base_url, llm_settings.api_key,
+                        cv_data, llm_settings.model)
         logger.info("Session %s: LLM client initialized", session_id)
 
         applied_count = [0]

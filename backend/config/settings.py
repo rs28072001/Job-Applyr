@@ -17,6 +17,13 @@ class Config:
     azure_openai_endpoint: str
     azure_openai_api_key: str
     azure_deployment_name: str
+    ai_provider: str
+    openai_api_key: str
+    openai_model: str
+    gemini_api_key: str
+    gemini_model: str
+    grok_api_key: str
+    grok_model: str
     confidence_threshold: int
     port_num: int
     chrome_user_data_dir: str
@@ -64,6 +71,13 @@ def load_config() -> Config:
         azure_openai_endpoint=require("AZURE_OPENAI_ENDPOINT"),
         azure_openai_api_key=require("AZURE_OPENAI_API_KEY"),
         azure_deployment_name=os.getenv("AZURE_DEPLOYMENT_NAME", "gpt-4o-mini").strip(),
+        ai_provider=os.getenv("AI_PROVIDER", "azure").strip(),
+        openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip(),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip(),
+        grok_api_key=os.getenv("GROK_API_KEY", "").strip(),
+        grok_model=os.getenv("GROK_MODEL", "grok-3-mini").strip(),
         confidence_threshold=optional_int("CONFIDENCE_THRESHOLD", 75),
         port_num=optional_int("PORT_NUM", 9222),
         chrome_user_data_dir=resolve_path("CHROME_USER_DATA_DIR", "./chrome_profile"),

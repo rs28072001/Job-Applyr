@@ -27,7 +27,8 @@ export default function App() {
 
         {/* Protected app routes */}
         <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
-          <Route index element={<SetupPage />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="setup" element={<SetupPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="history"   element={<HistoryPage />} />
         </Route>

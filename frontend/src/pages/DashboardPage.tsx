@@ -220,7 +220,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/")}
+          <button onClick={() => navigate("/setup")}
             className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500">
             <ArrowLeft className="w-4 h-4" />
           </button>

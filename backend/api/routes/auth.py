@@ -14,10 +14,6 @@ class SignUpRequest(BaseModel):
     email: str
     password: str = Field(min_length=6)
     full_name: str = ""
-    # Azure config collected at signup — saves user a step
-    azure_openai_endpoint: str = ""
-    azure_openai_api_key: str = ""
-    azure_deployment_name: str = "gpt-4o-mini"
 
 
 class LoginRequest(BaseModel):
@@ -45,13 +41,6 @@ def signup(body: SignUpRequest, db: DBSession = Depends(get_db)):
     )
     db.add(user)
     db.flush()  # get user.id before committing
-
-    # Store Azure config in the Config row (created by init_db)
-    cfg = db.get(Config, 1)
-    if cfg and body.azure_openai_endpoint:
-        cfg.azure_openai_endpoint = body.azure_openai_endpoint
-        cfg.azure_openai_api_key  = body.azure_openai_api_key
-        cfg.azure_deployment_name = body.azure_deployment_name or "gpt-4o-mini"
 
     db.commit()
     db.refresh(user)

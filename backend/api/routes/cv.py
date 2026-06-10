@@ -26,18 +26,20 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
 
     # Load config from DB for LLM credentials
     from api.models import Config as ConfigModel
+    from core.llm_provider import get_llm_settings, is_llm_configured
     cfg = db.get(ConfigModel, 1)
-    if not cfg or not cfg.azure_openai_endpoint:
+    if not cfg or not is_llm_configured(cfg):
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
+    llm_settings = get_llm_settings(cfg)
 
     # Run blocking parse
     try:
         from core.cv_parser import parse_cv, CVParseError
         cv_data = parse_cv(
             str(dest),
-            cfg.azure_openai_endpoint,
-            cfg.azure_openai_api_key,
-            cfg.azure_deployment_name or "gpt-4o-mini",
+            llm_settings.base_url,
+            llm_settings.api_key,
+            llm_settings.model,
         )
     except Exception as e:
         raise HTTPException(422, f"CV parse failed: {e}")

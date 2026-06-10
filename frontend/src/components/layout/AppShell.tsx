@@ -3,9 +3,14 @@ import { Briefcase, Settings, LayoutDashboard, History, LogOut, ChevronRight } f
 import { useAuthStore } from "../../store/authStore";
 import { useSessionStore } from "../../store/sessionStore";
 
-const NAV = [
-  { to: "/", label: "Setup",     icon: Settings,         end: true },
+const NAV: Array<{
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  end?: boolean;
+}> = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/setup", label: "Setup",     icon: Settings },
   { to: "/history",   label: "History",   icon: History   },
 ];
 

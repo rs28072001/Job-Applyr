@@ -15,6 +15,13 @@ class ConfigRead(BaseModel):
     azure_openai_endpoint : str = ""
     azure_openai_api_key  : str = ""   # masked to "***" by route
     azure_deployment_name : str = "gpt-4o-mini"
+    ai_provider           : str = "azure"
+    openai_api_key        : str = ""   # masked to "***" by route
+    openai_model          : str = "gpt-4o-mini"
+    gemini_api_key        : str = ""   # masked to "***" by route
+    gemini_model          : str = "gemini-2.5-flash"
+    grok_api_key          : str = ""   # masked to "***" by route
+    grok_model            : str = "grok-3-mini"
     confidence_threshold  : int = 75
     port_num              : int = 9222
     max_jobs_per_hour     : int = 30
@@ -33,6 +40,13 @@ class ConfigUpdate(BaseModel):
     azure_openai_endpoint : Optional[str] = None
     azure_openai_api_key  : Optional[str] = None
     azure_deployment_name : Optional[str] = None
+    ai_provider           : Optional[str] = None
+    openai_api_key        : Optional[str] = None
+    openai_model          : Optional[str] = None
+    gemini_api_key        : Optional[str] = None
+    gemini_model          : Optional[str] = None
+    grok_api_key          : Optional[str] = None
+    grok_model            : Optional[str] = None
     confidence_threshold  : Optional[int] = Field(None, ge=0, le=100)
     port_num              : Optional[int] = None
     max_jobs_per_hour     : Optional[int] = None
