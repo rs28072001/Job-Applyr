@@ -1,7 +1,7 @@
 """SQLAlchemy engine, session factory, and DB initialisation."""
 import os
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 
@@ -24,6 +24,17 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
+_CONFIG_COLUMN_DEFAULTS = {
+    "ai_provider": "'azure'",
+    "openai_api_key": "''",
+    "openai_model": "'gpt-4o-mini'",
+    "gemini_api_key": "''",
+    "gemini_model": "'gemini-2.5-flash'",
+    "grok_api_key": "''",
+    "grok_model": "'grok-3-mini'",
+}
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -41,6 +52,14 @@ def init_db() -> None:
     """Create all tables and ensure the singleton config row exists."""
     from api.models import Config  # local import to avoid circular
     Base.metadata.create_all(engine)
+
+    inspector = inspect(engine)
+    if "config" in inspector.get_table_names():
+        existing = {column["name"] for column in inspector.get_columns("config")}
+        with engine.begin() as conn:
+            for name, default in _CONFIG_COLUMN_DEFAULTS.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE config ADD COLUMN {name} VARCHAR DEFAULT {default}"))
 
     db = SessionLocal()
     try:

@@ -36,6 +36,13 @@ class Config(Base):
     azure_openai_endpoint = Column(String,  default="")
     azure_openai_api_key  = Column(String,  default="")
     azure_deployment_name = Column(String,  default="gpt-4o-mini")
+    ai_provider           = Column(String,  default="azure")  # azure | openai | gemini | grok
+    openai_api_key        = Column(String,  default="")
+    openai_model          = Column(String,  default="gpt-4o-mini")
+    gemini_api_key        = Column(String,  default="")
+    gemini_model          = Column(String,  default="gemini-2.5-flash")
+    grok_api_key          = Column(String,  default="")
+    grok_model            = Column(String,  default="grok-3-mini")
     confidence_threshold  = Column(Integer, default=75)
     port_num              = Column(Integer, default=9222)
     max_jobs_per_hour     = Column(Integer, default=30)

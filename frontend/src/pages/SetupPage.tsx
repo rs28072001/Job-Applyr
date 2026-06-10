@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import {
   Upload, CheckCircle2, AlertCircle, Loader2, Play, Settings2,
   MapPin, Target, Sliders, User, Mail, Phone,
-  Briefcase, Star, Save, ChevronDown,
+  Briefcase, Star, Save, ChevronDown, Key, Cpu, Globe,
 } from "lucide-react";
 import { api } from "../api/client";
 import type { AppConfig, CVProfile, SessionStartRequest } from "../api/types";
@@ -161,6 +161,16 @@ function SettingsAccordion() {
   const [saved, setSaved]   = useState(false);
   const [cfg, setCfg]       = useState({ naukri_email:"", naukri_password:"",
                                           linkedin_email:"", linkedin_password:"",
+                                          ai_provider:"azure" as AppConfig["ai_provider"],
+                                          azure_openai_endpoint:"",
+                                          azure_openai_api_key:"",
+                                          azure_deployment_name:"gpt-4o-mini",
+                                          openai_api_key:"",
+                                          openai_model:"gpt-4o-mini",
+                                          gemini_api_key:"",
+                                          gemini_model:"gemini-2.5-flash",
+                                          grok_api_key:"",
+                                          grok_model:"grok-3-mini",
                                           confidence_threshold:75, max_jobs_per_hour:30 });
 
   useEffect(() => {
@@ -171,6 +181,16 @@ function SettingsAccordion() {
         naukri_password: r.data.naukri_password === "***" ? "" : (r.data.naukri_password || ""),
         linkedin_email: r.data.linkedin_email || "",
         linkedin_password: r.data.linkedin_password === "***" ? "" : (r.data.linkedin_password || ""),
+        ai_provider: r.data.ai_provider || "azure",
+        azure_openai_endpoint: r.data.azure_openai_endpoint || "",
+        azure_openai_api_key: r.data.azure_openai_api_key === "***" ? "" : (r.data.azure_openai_api_key || ""),
+        azure_deployment_name: r.data.azure_deployment_name || "gpt-4o-mini",
+        openai_api_key: r.data.openai_api_key === "***" ? "" : (r.data.openai_api_key || ""),
+        openai_model: r.data.openai_model || "gpt-4o-mini",
+        gemini_api_key: r.data.gemini_api_key === "***" ? "" : (r.data.gemini_api_key || ""),
+        gemini_model: r.data.gemini_model || "gemini-2.5-flash",
+        grok_api_key: r.data.grok_api_key === "***" ? "" : (r.data.grok_api_key || ""),
+        grok_model: r.data.grok_model || "grok-3-mini",
         confidence_threshold: r.data.confidence_threshold,
         max_jobs_per_hour: r.data.max_jobs_per_hour,
       });
@@ -179,7 +199,18 @@ function SettingsAccordion() {
 
   async function save() {
     setSaving(true);
-    await api.put("/api/config", cfg);
+    const payload: Record<string, unknown> = { ...cfg };
+    [
+      "naukri_password",
+      "linkedin_password",
+      "azure_openai_api_key",
+      "openai_api_key",
+      "gemini_api_key",
+      "grok_api_key",
+    ].forEach((key) => {
+      if (!payload[key]) delete payload[key];
+    });
+    await api.put("/api/config", payload);
     setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -192,14 +223,73 @@ function SettingsAccordion() {
           <Settings2 className="w-4 h-4 text-slate-600" />
         </div>
         <div className="flex-1 text-left">
-          <p className="text-sm font-semibold text-slate-900">Platform Credentials & Settings</p>
-          <p className="text-xs text-slate-500 mt-0.5">Naukri, LinkedIn, rate limits</p>
+          <p className="text-sm font-semibold text-slate-900">Platform Credentials, AI Keys & Settings</p>
+          <p className="text-xs text-slate-500 mt-0.5">Naukri, LinkedIn, provider keys, rate limits</p>
         </div>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
         <div className="px-6 py-5 border-t border-slate-100 space-y-5">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-slate-900">AI Provider Keys</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Active AI Provider</Label>
+                <select
+                  value={cfg.ai_provider}
+                  onChange={(e) => setCfg({ ...cfg, ai_provider: e.target.value as AppConfig["ai_provider"] })}
+                  className={inputCls}
+                >
+                  <option value="azure">Azure OpenAI</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="grok">Grok</option>
+                </select>
+              </div>
+              <div>
+                <Label>Azure Endpoint</Label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input value={cfg.azure_openai_endpoint}
+                    onChange={(e) => setCfg({ ...cfg, azure_openai_endpoint: e.target.value })}
+                    placeholder="https://your-resource.openai.azure.com/openai/v1/"
+                    className={`${inputCls} pl-8`} />
+                </div>
+              </div>
+              {[
+                { label:"Azure API Key",  k:"azure_openai_api_key", type:"password" },
+                { label:"Azure Deployment", k:"azure_deployment_name", type:"text" },
+                { label:"OpenAI API Key", k:"openai_api_key", type:"password" },
+                { label:"OpenAI Model",   k:"openai_model", type:"text" },
+                { label:"Gemini API Key", k:"gemini_api_key", type:"password" },
+                { label:"Gemini Model",   k:"gemini_model", type:"text" },
+                { label:"Grok API Key",   k:"grok_api_key", type:"password" },
+                { label:"Grok Model",     k:"grok_model", type:"text" },
+              ].map(({ label, k, type }) => (
+                <div key={k}>
+                  <Label>{label}</Label>
+                  <div className="relative">
+                    {type === "password"
+                      ? <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      : <Cpu className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />}
+                    <input type={type} value={(cfg as any)[k]}
+                      placeholder={type === "password" ? "Paste key to update" : ""}
+                      onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })}
+                      className={`${inputCls} pl-8`} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-px bg-slate-100" />
+
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-slate-900">Platform Credentials & Limits</p>
           <div className="grid grid-cols-2 gap-4">
             {[
               { label:"Naukri Email",     k:"naukri_email",    type:"email" },
@@ -228,6 +318,7 @@ function SettingsAccordion() {
                 onChange={(e) => setCfg({ ...cfg, max_jobs_per_hour: +e.target.value })}
                 className={inputCls} />
             </div>
+          </div>
           </div>
           <button onClick={save} disabled={saving}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-700

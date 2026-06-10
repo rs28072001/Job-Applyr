@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Eye, EyeOff, Mail, Lock, User, Briefcase,
-  Key, Globe, Cpu, ChevronRight, ChevronLeft, Loader2, Check,
+  Loader2, Check, Cpu,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
@@ -37,52 +37,19 @@ function Field({
   );
 }
 
-/* ── Step indicator ──────────────────────────────────────────────────────── */
-function Steps({ current }: { current: number }) {
-  const steps = ["Account", "AI Config"];
-  return (
-    <div className="flex items-center gap-2 mb-8">
-      {steps.map((label, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
-            ${i < current ? "bg-emerald-500 text-white"
-              : i === current ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-400"}`}>
-            {i < current ? <Check className="w-3.5 h-3.5" /> : i + 1}
-          </div>
-          <span className={`text-sm font-medium ${i === current ? "text-gray-900" : "text-gray-400"}`}>
-            {label}
-          </span>
-          {i < steps.length - 1 && (
-            <div className={`h-px w-8 mx-1 ${i < current ? "bg-emerald-400" : "bg-gray-200"}`} />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── Main component ──────────────────────────────────────────────────────── */
 export default function SignUpPage() {
   const navigate = useNavigate();
   const setAuth  = useAuthStore((s) => s.setAuth);
 
-  const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
-  // Step 0 — Account
   const [fullName, setFullName]       = useState("");
   const [email, setEmail]             = useState("");
   const [password, setPassword]       = useState("");
   const [confirmPw, setConfirmPw]     = useState("");
   const [showPw, setShowPw]           = useState(false);
-
-  // Step 1 — AI Config
-  const [endpoint, setEndpoint]       = useState("");
-  const [apiKey, setApiKey]           = useState("");
-  const [showKey, setShowKey]         = useState(false);
-  const [model, setModel]             = useState("gpt-4o-mini");
 
   // Password strength
   const pwStrength = password.length === 0 ? -1
@@ -92,34 +59,25 @@ export default function SignUpPage() {
   const strengthLabel = ["Too short", "Weak", "Good", "Strong"][pwStrength + 1] ?? "";
   const strengthColor = ["", "bg-red-400", "bg-yellow-400", "bg-blue-400", "bg-emerald-500"][pwStrength + 1] ?? "";
 
-  function validateStep0() {
+  function validateForm() {
     if (!email || !password || !confirmPw) return "All fields are required";
     if (password.length < 6) return "Password must be at least 6 characters";
     if (password !== confirmPw) return "Passwords do not match";
     return "";
   }
 
-  function nextStep() {
-    const err = validateStep0();
-    if (err) { setError(err); return; }
-    setError("");
-    setStep(1);
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!endpoint || !apiKey) { setError("Azure endpoint and API key are required"); return; }
+    const err = validateForm();
+    if (err) { setError(err); return; }
     setError("");
     setLoading(true);
     try {
       const { data } = await api.post("/api/auth/signup", {
         email, password, full_name: fullName,
-        azure_openai_endpoint: endpoint,
-        azure_openai_api_key: apiKey,
-        azure_deployment_name: model || "gpt-4o-mini",
       });
       setAuth(data.access_token, data.user_id, data.email, data.full_name);
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.detail ?? "Signup failed. Please try again.");
     } finally {
@@ -154,8 +112,8 @@ export default function SignUpPage() {
             Start applying smarter today
           </h1>
           <p className="text-indigo-200 text-lg leading-relaxed">
-            Create your free account, connect your Azure OpenAI key, and let our AI handle
-            job searching and applications while you focus on interviews.
+            Create your free account, then add your preferred AI provider in settings when
+            you are ready to parse CVs and score job matches.
           </p>
 
           <div className="mt-10 bg-white/10 backdrop-blur rounded-2xl p-5 border border-white/10">
@@ -164,10 +122,10 @@ export default function SignUpPage() {
                 <Cpu className="w-4 h-4 text-emerald-400" />
               </div>
               <div>
-                <p className="text-white text-sm font-semibold mb-1">Why do we need your Azure key?</p>
+                <p className="text-white text-sm font-semibold mb-1">Bring your own AI key</p>
                 <p className="text-indigo-200 text-xs leading-relaxed">
-                  We use your own Azure OpenAI key to parse CVs and score job matches.
-                  Your key is stored locally in your own database — it never leaves your machine.
+                  Add Azure OpenAI, OpenAI, Gemini, or Grok credentials after signup.
+                  Your keys are stored locally in your own database.
                 </p>
               </div>
             </div>
@@ -195,11 +153,7 @@ export default function SignUpPage() {
             <p className="text-gray-500 text-sm">Free forever. No credit card required.</p>
           </div>
 
-          <Steps current={step} />
-
-          {/* ── STEP 0: Account ── */}
-          {step === 0 && (
-            <div className="space-y-5">
+          <form onSubmit={submit} className="space-y-5">
               <Field label="Full name" icon={User} value={fullName} onChange={setFullName}
                 placeholder="Bhawana Jangra" />
 
@@ -249,90 +203,16 @@ export default function SignUpPage() {
                 </div>
               )}
 
-              <button onClick={nextStep}
+              <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700
-                           text-white font-semibold py-3 rounded-xl text-sm shadow-sm shadow-indigo-200">
-                Continue <ChevronRight className="w-4 h-4" />
+                           disabled:opacity-60 text-white font-semibold py-3 rounded-xl text-sm shadow-sm shadow-indigo-200">
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</>
+                ) : (
+                  <><Check className="w-4 h-4" /> Create account</>
+                )}
               </button>
-            </div>
-          )}
-
-          {/* ── STEP 1: AI Config ── */}
-          {step === 1 && (
-            <form onSubmit={submit} className="space-y-5">
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700 flex items-start gap-2">
-                <Key className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Your Azure credentials are saved locally and never sent to any third-party server.</span>
-              </div>
-
-              <Field label="Azure OpenAI Endpoint" icon={Globe}
-                value={endpoint} onChange={setEndpoint} required
-                placeholder="https://your-resource.cognitiveservices.azure.com/openai/v1/"
-                hint="Found in your Azure portal under Keys & Endpoint" />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  API Key <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Your Azure API key"
-                    className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm
-                               focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                               hover:border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400"
-                  />
-                  <button type="button" onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Model / Deployment Name</label>
-                <div className="relative">
-                  <Cpu className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text" value={model} onChange={(e) => setModel(e.target.value)}
-                    placeholder="gpt-4o-mini"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm
-                               focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
-                               hover:border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-400">Default: gpt-4o-mini</p>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-100
-                               rounded-xl px-4 py-3 text-sm">
-                  ⚠ {error}
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <button type="button" onClick={() => { setStep(0); setError(""); }}
-                  className="flex items-center gap-1 px-4 py-3 border border-gray-200 rounded-xl text-sm
-                             font-medium text-gray-600 hover:bg-gray-50">
-                  <ChevronLeft className="w-4 h-4" /> Back
-                </button>
-                <button type="submit" disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700
-                             disabled:opacity-60 text-white font-semibold py-3 rounded-xl text-sm
-                             shadow-sm shadow-indigo-200">
-                  {loading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Creating account…</>
-                  ) : (
-                    <><Check className="w-4 h-4" /> Create account</>
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
+          </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
             Already have an account?{" "}

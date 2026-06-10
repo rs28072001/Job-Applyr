@@ -28,7 +28,7 @@ export default function SignInPage() {
     try {
       const { data } = await api.post("/api/auth/login", { email, password });
       setAuth(data.access_token, data.user_id, data.email, data.full_name);
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(err.response?.data?.detail ?? "Invalid email or password");
     } finally {

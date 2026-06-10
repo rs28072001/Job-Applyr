@@ -7,18 +7,23 @@ from api.auth import get_current_user
 from api.database import get_db
 from api.models import Config, User
 from api.schemas import ConfigUpdate
+from core.llm_provider import is_llm_configured
 
 router = APIRouter()
 
-_REQUIRED_FIELDS = ("azure_openai_endpoint", "azure_openai_api_key")
-
-
 def _mask(cfg: Config) -> dict:
     d = {c.name: getattr(cfg, c.name) for c in Config.__table__.columns}
-    for f in ("naukri_password", "linkedin_password", "azure_openai_api_key"):
+    for f in (
+        "naukri_password",
+        "linkedin_password",
+        "azure_openai_api_key",
+        "openai_api_key",
+        "gemini_api_key",
+        "grok_api_key",
+    ):
         if d.get(f):
             d[f] = "***"
-    d["is_configured"] = all(getattr(cfg, f) for f in _REQUIRED_FIELDS)
+    d["is_configured"] = is_llm_configured(cfg)
     return d
 
 
@@ -37,4 +42,4 @@ def update_config(body: ConfigUpdate, db: DBSession = Depends(get_db), _: User =
     from datetime import datetime, timezone
     cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
-    return {"status": "saved", "is_configured": all(getattr(cfg, f) for f in _REQUIRED_FIELDS)}
+    return {"status": "saved", "is_configured": is_llm_configured(cfg)}
