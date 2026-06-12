@@ -199,6 +199,35 @@ def apply_exception(title: str, err: Exception) -> None:
            "traceback": traceback.format_exc()})
 
 
+def job_status(application_id: int, status: str, failure_reason: str = "",
+               classification: str = "", title: str = "", company: str = "") -> None:
+    """Emit a precise lifecycle state change for one application row."""
+    get().info("  [STATUS] app=%s → %s%s%s", application_id, status,
+               f"  reason={failure_reason}" if failure_reason else "",
+               f"  class={classification}" if classification else "")
+    _emit({"type": "job_status", "application_id": application_id,
+           "status": status, "failure_reason": failure_reason,
+           "classification": classification, "title": title, "company": company})
+
+
+def job_classified(application_id: int, classification: str, title: str = "") -> None:
+    get().info("  [CLASSIFY] app=%s → %s", application_id, classification)
+    _emit({"type": "job_classified", "application_id": application_id,
+           "classification": classification, "title": title})
+
+
+def outreach_drafted(application_id: int, draft_id: int, email: str, source_url: str = "") -> None:
+    get().info("  [OUTREACH] draft #%s created for app=%s → %s (draft only, NOT sent)",
+               draft_id, application_id, email)
+    _emit({"type": "outreach_drafted", "application_id": application_id,
+           "draft_id": draft_id, "email": email, "source_url": source_url})
+
+
+def backoff(reason: str, seconds: float) -> None:
+    get().warning("[BACKOFF] %s — pausing %.0fs", reason, seconds)
+    _emit({"type": "backoff", "reason": reason, "seconds": seconds})
+
+
 def rate_limit(msg: str) -> None:
     get().warning("[RATE_LIMIT] %s", msg)
     _emit({"type": "rate_limit", "msg": msg})

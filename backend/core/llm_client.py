@@ -125,6 +125,23 @@ class LLMClient:
                 return "As per industry standards"
             return "Yes"
 
+    def draft_outreach_email(self, job_title: str, company: str, job_url: str) -> str:
+        """Draft (never send) a short recruiter outreach email body."""
+        prompt = (
+            f"Write a short, professional job-application email body (120-170 words) for the role "
+            f"'{job_title}' at '{company}'. Mention 2-3 of the candidate's most relevant skills, "
+            f"reference the job posting ({job_url}), and close politely with the candidate's name. "
+            "Plain text only — no subject line, no markdown, no placeholders like [Name]."
+        )
+        resp = self._client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return resp.choices[0].message.content.strip()
+
     def score_job(self, job_description: str, retries: int = 3) -> JobScore:
         last_error = ""
         for attempt in range(retries):

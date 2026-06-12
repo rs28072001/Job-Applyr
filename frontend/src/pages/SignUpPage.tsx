@@ -124,7 +124,7 @@ export default function SignUpPage() {
               <div>
                 <p className="text-white text-sm font-semibold mb-1">Bring your own AI key</p>
                 <p className="text-indigo-200 text-xs leading-relaxed">
-                  Add Azure OpenAI, OpenAI, Gemini, or Grok credentials after signup.
+                  Add Azure OpenAI, OpenAI, Gemini, or Groq credentials after signup.
                   Your keys are stored locally in your own database.
                 </p>
               </div>
@@ -155,7 +155,7 @@ export default function SignUpPage() {
 
           <form onSubmit={submit} className="space-y-5">
               <Field label="Full name" icon={User} value={fullName} onChange={setFullName}
-                placeholder="Bhawana Jangra" />
+                placeholder="Your name" />
 
               <Field label="Email address" icon={Mail} value={email} onChange={setEmail}
                 placeholder="you@example.com" required type="email" />

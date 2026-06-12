@@ -9,6 +9,10 @@ class LLMSettings:
     model: str
 
 
+class LLMConfigError(Exception):
+    pass
+
+
 def get_llm_settings(cfg) -> LLMSettings:
     provider = (getattr(cfg, "ai_provider", "") or "azure").lower()
 
@@ -28,12 +32,20 @@ def get_llm_settings(cfg) -> LLMSettings:
             model=getattr(cfg, "gemini_model", "") or "gemini-2.5-flash",
         )
 
-    if provider == "grok":
+    if provider == "groq":
         return LLMSettings(
-            provider="grok",
-            base_url="https://api.x.ai/v1",
-            api_key=getattr(cfg, "grok_api_key", "") or "",
-            model=getattr(cfg, "grok_model", "") or "grok-3-mini",
+            provider="groq",
+            base_url="https://api.groq.com/openai/v1",
+            api_key=getattr(cfg, "groq_api_key", "") or "",
+            model=getattr(cfg, "groq_model", "") or "openai/gpt-oss-120b",
+        )
+
+    if provider == "openrouter":
+        return LLMSettings(
+            provider="openrouter",
+            base_url=(getattr(cfg, "openrouter_base_url", "") or "https://openrouter.ai/api/v1").rstrip("/"),
+            api_key=getattr(cfg, "openrouter_api_key", "") or "",
+            model=getattr(cfg, "openrouter_model", "") or "openai/gpt-oss-120b",
         )
 
     return LLMSettings(
@@ -47,3 +59,17 @@ def get_llm_settings(cfg) -> LLMSettings:
 def is_llm_configured(cfg) -> bool:
     settings = get_llm_settings(cfg)
     return bool(settings.base_url and settings.api_key and settings.model)
+
+
+def validate_llm_settings(settings: LLMSettings) -> None:
+    if not settings.api_key:
+        raise LLMConfigError(f"{settings.provider} API key is missing.")
+    if not settings.model:
+        raise LLMConfigError(f"{settings.provider} model is missing.")
+    if not settings.base_url:
+        raise LLMConfigError(f"{settings.provider} endpoint is missing.")
+    if settings.provider == "azure" and "/openai/v1" not in settings.base_url.rstrip("/"):
+        raise LLMConfigError(
+            "Azure OpenAI endpoint must include '/openai/v1/', for example "
+            "https://your-resource.openai.azure.com/openai/v1/"
+        )

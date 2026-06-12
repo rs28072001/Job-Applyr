@@ -2,8 +2,9 @@
 .env
 .env.local
 
-# Chrome profile
+# Chrome profiles (runtime browser data)
 chrome_profile/
+backend/data/chrome_profiles/
 
 # Logs
 logs/
@@ -44,6 +45,9 @@ cv/*.docx
 # Runtime data — SQLite DB and uploaded CVs (persisted via Docker volume)
 data/*.db
 data/cv/
+backend/data/*.db
+backend/data/cv/
+backend/data/evidence/
 
 # Temporary files
 *.tmp

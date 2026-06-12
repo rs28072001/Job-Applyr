@@ -22,16 +22,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to /login on 401
 api.interceptors.response.use(
   (r) => r,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("sja-auth");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 export const WS_URL =

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, Briefcase, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Briefcase, CheckCircle2, ArrowRight, Loader2, LayoutDashboard } from "lucide-react";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/authStore";
 
@@ -162,6 +162,15 @@ export default function SignInPage() {
               )}
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="mt-3 w-full flex items-center justify-center gap-2 bg-white hover:bg-slate-50
+                       text-slate-700 font-semibold py-3 rounded-xl text-sm border border-slate-200"
+          >
+            Dashboard <LayoutDashboard className="w-4 h-4" />
+          </button>
 
           <p className="mt-6 text-center text-sm text-gray-500">
             Don't have an account?{" "}

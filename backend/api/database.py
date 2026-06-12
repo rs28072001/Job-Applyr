@@ -25,13 +25,27 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 _CONFIG_COLUMN_DEFAULTS = {
+    "easy_apply_only": "1",
+    "include_external_review": "1",
+    "outreach_mode": "'draft_only'",
+    "smtp_host": "''",
+    "smtp_port": "587",
+    "smtp_username": "''",
+    "smtp_password": "''",
+    "smtp_from": "''",
+    "hide_previously_skipped": "1",
+    "auto_ignore_skipped": "1",
+    "date_posted_filter": "'any'",
     "ai_provider": "'azure'",
     "openai_api_key": "''",
     "openai_model": "'gpt-4o-mini'",
     "gemini_api_key": "''",
     "gemini_model": "'gemini-2.5-flash'",
-    "grok_api_key": "''",
-    "grok_model": "'grok-3-mini'",
+    "groq_api_key": "''",
+    "groq_model": "'openai/gpt-oss-120b'",
+    "openrouter_api_key": "''",
+    "openrouter_model": "'openai/gpt-oss-120b'",
+    "openrouter_base_url": "'https://openrouter.ai/api/v1'",
 }
 
 
@@ -54,12 +68,68 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
 
     inspector = inspect(engine)
+
+    _SESSION_COLUMN_DEFAULTS = {
+        "easy_apply_only": "1",
+        "include_external_review": "1",
+        "outreach_mode": "'draft_only'",
+        "hide_previously_skipped": "1",
+        "auto_ignore_skipped": "1",
+        "date_posted_filter": "'any'",
+    }
+    _APPLICATION_COLUMN_DEFAULTS = {
+        "classification": "''",
+        "failure_reason": "''",
+        "recommendation": "''",
+        "rationale": "''",
+        "evidence_path": "''",
+        "updated_at": "NULL",
+    }
+    for table, defaults in (("sessions", _SESSION_COLUMN_DEFAULTS),
+                            ("applications", _APPLICATION_COLUMN_DEFAULTS)):
+        if table in inspector.get_table_names():
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            with engine.begin() as conn:
+                for name, default in defaults.items():
+                    if name not in existing:
+                        conn.execute(text(
+                            f"ALTER TABLE {table} ADD COLUMN {name} VARCHAR DEFAULT {default}"
+                        ))
+    # Migrate legacy application statuses to the new lifecycle vocabulary.
+    if "applications" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE applications SET status='manual_review', failure_reason='external_site' "
+                "WHERE status='skipped_external'"
+            ))
+            conn.execute(text("UPDATE applications SET status='failed' WHERE status='error'"))
+            # Skip-reason vocabulary rename (v3): clearer, user-facing names.
+            conn.execute(text(
+                "UPDATE applications SET failure_reason='low_score' WHERE failure_reason='below_threshold'"))
+            conn.execute(text(
+                "UPDATE applications SET failure_reason='ai_skip' WHERE failure_reason='llm_recommended_skip'"))
+    if "ignored_jobs" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE ignored_jobs SET status='expired' WHERE ignore_reason='title_mismatch'"
+            ))
+            # v4: external company-site jobs are auto-SAVED (no user action
+            # requested). Lift previous external rows into the saved list.
+            conn.execute(text(
+                "UPDATE applications SET status='saved' "
+                "WHERE failure_reason='external_site' AND status IN ('manual_review','skipped')"))
+
     if "config" in inspector.get_table_names():
         existing = {column["name"] for column in inspector.get_columns("config")}
         with engine.begin() as conn:
             for name, default in _CONFIG_COLUMN_DEFAULTS.items():
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE config ADD COLUMN {name} VARCHAR DEFAULT {default}"))
+            if "grok_api_key" in existing and "groq_api_key" not in existing:
+                conn.execute(text("UPDATE config SET groq_api_key = COALESCE(NULLIF(grok_api_key, ''), groq_api_key)"))
+            if "grok_model" in existing and "groq_model" not in existing:
+                conn.execute(text("UPDATE config SET groq_model = COALESCE(NULLIF(grok_model, ''), groq_model)"))
+            conn.execute(text("UPDATE config SET ai_provider = 'groq' WHERE ai_provider = 'grok'"))
 
     db = SessionLocal()
     try:

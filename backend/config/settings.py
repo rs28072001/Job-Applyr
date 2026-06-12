@@ -22,8 +22,11 @@ class Config:
     openai_model: str
     gemini_api_key: str
     gemini_model: str
-    grok_api_key: str
-    grok_model: str
+    groq_api_key: str
+    groq_model: str
+    openrouter_api_key: str
+    openrouter_model: str
+    openrouter_base_url: str
     confidence_threshold: int
     port_num: int
     chrome_user_data_dir: str
@@ -34,6 +37,13 @@ class Config:
     job_target: int
     location: str
     platform_choice: str
+    # Safer-automation controls
+    easy_apply_only: bool = True            # platform-native apply flows only
+    include_external_review: bool = True    # external jobs → manual review queue
+    outreach_mode: str = "draft_only"       # off | draft_only | send_after_approval
+    hide_previously_skipped: bool = True
+    auto_ignore_skipped: bool = True
+    date_posted_filter: str = "any"         # any | 24h | 3d | 7d | 14d
 
 
 def load_config() -> Config:
@@ -76,8 +86,11 @@ def load_config() -> Config:
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip(),
         gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip(),
-        grok_api_key=os.getenv("GROK_API_KEY", "").strip(),
-        grok_model=os.getenv("GROK_MODEL", "grok-3-mini").strip(),
+        groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
+        groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip(),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", "").strip(),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b").strip(),
+        openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip(),
         confidence_threshold=optional_int("CONFIDENCE_THRESHOLD", 75),
         port_num=optional_int("PORT_NUM", 9222),
         chrome_user_data_dir=resolve_path("CHROME_USER_DATA_DIR", "./chrome_profile"),

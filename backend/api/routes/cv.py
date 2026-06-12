@@ -26,11 +26,15 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
 
     # Load config from DB for LLM credentials
     from api.models import Config as ConfigModel
-    from core.llm_provider import get_llm_settings, is_llm_configured
+    from core.llm_provider import get_llm_settings, is_llm_configured, validate_llm_settings, LLMConfigError
     cfg = db.get(ConfigModel, 1)
     if not cfg or not is_llm_configured(cfg):
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
     llm_settings = get_llm_settings(cfg)
+    try:
+        validate_llm_settings(llm_settings)
+    except LLMConfigError as e:
+        raise HTTPException(400, str(e))
 
     # Run blocking parse
     try:
@@ -42,7 +46,13 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
             llm_settings.model,
         )
     except Exception as e:
-        raise HTTPException(422, f"CV parse failed: {e}")
+        msg = str(e) or type(e).__name__
+        if "Connection error" in msg:
+            msg = (
+                f"Could not reach {llm_settings.provider} at {llm_settings.base_url}. "
+                "Check the active provider, endpoint, API key, and model."
+            )
+        raise HTTPException(422, f"CV parse failed: {msg}")
 
     # Mark all existing profiles inactive
     db.query(CVProfile).update({"is_active": False})
