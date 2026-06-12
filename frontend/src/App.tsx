@@ -2,7 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
 import SetupPage from "./pages/SetupPage";
 import DashboardPage from "./pages/DashboardPage";
+import ReviewQueuePage from "./pages/ReviewQueuePage";
 import HistoryPage from "./pages/HistoryPage";
+import IgnoredJobsPage from "./pages/IgnoredJobsPage";
 
 export default function App() {
   return (
@@ -14,7 +16,9 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="setup" element={<SetupPage />} />
-          <Route path="history"   element={<HistoryPage />} />
+          <Route path="review" element={<ReviewQueuePage />} />
+          <Route path="ignored" element={<IgnoredJobsPage />} />
+          <Route path="history" element={<HistoryPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

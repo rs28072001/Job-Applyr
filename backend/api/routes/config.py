@@ -20,6 +20,7 @@ SECRET_FIELDS = (
     "gemini_api_key",
     "groq_api_key",
     "openrouter_api_key",
+    "smtp_password",
 )
 
 def _mask(cfg: Config) -> dict:

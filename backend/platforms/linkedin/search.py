@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from ..base_platform import JobListing
+from core.date_filters import linkedin_time_filter
 from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -60,20 +61,42 @@ def _parse_card(card, platform="linkedin") -> JobListing | None:
         return None
 
 
+def build_search_url(
+    keywords: list[str],
+    location: str,
+    easy_apply_only: bool = True,
+    date_posted_filter: str = "any",
+) -> str:
+    """Build the LinkedIn jobs search URL.
+
+    When easy_apply_only is True (the default) the platform's own Easy Apply
+    filter (f_LF=f_AL) is applied so only platform-native applications are
+    returned — no external ATS redirects.
+    """
+    keyword = quote_plus(keywords[0] if keywords else "software developer")
+    loc = quote_plus(location)
+    url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&location={loc}"
+    if easy_apply_only:
+        url += "&f_LF=f_AL"  # LinkedIn Easy Apply platform filter
+    time_filter = linkedin_time_filter(date_posted_filter)
+    if time_filter:
+        url += f"&f_TPR={time_filter}"
+    return url
+
+
 def search_jobs(
     driver,
     keywords: list[str],
     location: str,
     max_jobs: int,
     rate_limiter: RateLimiter,
+    easy_apply_only: bool = True,
+    date_posted_filter: str = "any",
 ) -> list[JobListing]:
     listings: list[JobListing] = []
     seen_urls: set = set()
-    keyword = quote_plus(keywords[0] if keywords else "software developer")
-    loc = quote_plus(location)
 
-    # f_LF=f_AL = Easy Apply filter
-    base_url = f"https://www.linkedin.com/jobs/search/?keywords={keyword}&location={loc}&f_LF=f_AL"
+    base_url = build_search_url(keywords, location, easy_apply_only, date_posted_filter)
 
     page = 0
     while len(listings) < max_jobs:

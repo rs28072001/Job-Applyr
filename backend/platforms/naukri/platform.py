@@ -3,6 +3,8 @@ from . import login, search, job_scraper, apply
 
 
 class NaukriPlatform(BasePlatform):
+    name = "naukri"
+
     def check_login(self) -> bool:
         return login.check_login(self.driver, self.config.naukri_userid)
 

@@ -17,6 +17,90 @@ body {
   min-height: 100vh;
 }
 
+.dark body { background: #0B1220; color: #E2E8F0; color-scheme: dark; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ── Dark theme palette remap ─────────────────────────────────────────────
+   The app uses a small, consistent Tailwind palette. Remapping those utility
+   classes under .dark gives complete coverage (tables, modals, badges,
+   alerts, empty/error states) without touching every component. */
+.dark .bg-white            { background-color: #0F172A; }
+.dark .bg-slate-50         { background-color: #0B1220; }
+.dark .bg-slate-50\/50     { background-color: rgb(30 41 59 / .35); }
+.dark .bg-slate-100        { background-color: #1E293B; }
+.dark .hover\:bg-slate-50:hover    { background-color: #16213A; }
+.dark .hover\:bg-slate-50\/80:hover{ background-color: #16213A; }
+.dark .hover\:bg-slate-100:hover   { background-color: #243049; }
+.dark .border-slate-100    { border-color: #1E293B; }
+.dark .border-slate-200    { border-color: #2B3A55; }
+.dark .border-slate-300    { border-color: #3B4D6E; }
+.dark .hover\:border-slate-300:hover { border-color: #46597E; }
+.dark .hover\:border-slate-400:hover { border-color: #54688F; }
+.dark .text-slate-900      { color: #F1F5F9; }
+.dark .text-slate-800      { color: #E2E8F0; }
+.dark .text-slate-700      { color: #CBD5E1; }
+.dark .text-slate-600      { color: #94A3B8; }
+.dark .text-slate-500      { color: #8B9BB4; }
+.dark .text-slate-400      { color: #64748B; }
+.dark .text-slate-300      { color: #475569; }
+.dark .placeholder-slate-400::placeholder { color: #64748B; }
+
+/* Indigo accents */
+.dark .bg-indigo-50        { background-color: rgb(67 56 202 / .22); }
+.dark .border-indigo-100   { border-color: rgb(99 102 241 / .35); }
+.dark .border-indigo-200,
+.dark .border-indigo-300,
+.dark .border-indigo-400   { border-color: rgb(129 140 248 / .5); }
+.dark .text-indigo-600     { color: #A5B4FC; }
+.dark .text-indigo-700     { color: #C7D2FE; }
+.dark .hover\:text-indigo-700:hover { color: #E0E7FF; }
+
+/* Status colors: translucent dark backgrounds + lifted text */
+.dark .bg-emerald-50  { background-color: rgb(6 95 70 / .25); }
+.dark .border-emerald-200 { border-color: rgb(16 185 129 / .4); }
+.dark .text-emerald-600, .dark .text-emerald-700 { color: #6EE7B7; }
+.dark .text-emerald-800 { color: #A7F3D0; }
+.dark .hover\:bg-emerald-100:hover { background-color: rgb(6 95 70 / .4); }
+.dark .bg-emerald-50\/60 { background-color: rgb(6 95 70 / .2); }
+
+.dark .bg-amber-50    { background-color: rgb(120 53 15 / .25); }
+.dark .border-amber-200 { border-color: rgb(245 158 11 / .4); }
+.dark .text-amber-600, .dark .text-amber-700 { color: #FCD34D; }
+.dark .text-amber-800 { color: #FDE68A; }
+.dark .hover\:bg-amber-100:hover { background-color: rgb(120 53 15 / .4); }
+
+.dark .bg-red-50      { background-color: rgb(127 29 29 / .25); }
+.dark .border-red-200, .dark .border-red-100 { border-color: rgb(239 68 68 / .4); }
+.dark .text-red-500, .dark .text-red-600, .dark .text-red-700 { color: #FCA5A5; }
+
+.dark .bg-sky-50      { background-color: rgb(12 74 110 / .3); }
+.dark .border-sky-200 { border-color: rgb(56 189 248 / .4); }
+.dark .text-sky-600, .dark .text-sky-700 { color: #7DD3FC; }
+.dark .text-sky-800   { color: #BAE6FD; }
+.dark .hover\:bg-sky-100:hover { background-color: rgb(12 74 110 / .45); }
+
+.dark .bg-teal-50     { background-color: rgb(19 78 74 / .3); }
+.dark .border-teal-200{ border-color: rgb(45 212 191 / .4); }
+.dark .text-teal-700  { color: #5EEAD4; }
+.dark .hover\:bg-teal-100:hover { background-color: rgb(19 78 74 / .45); }
+
+.dark .bg-orange-50   { background-color: rgb(124 45 18 / .25); }
+.dark .border-orange-200 { border-color: rgb(249 115 22 / .4); }
+.dark .text-orange-600, .dark .text-orange-700 { color: #FDBA74; }
+
+.dark .bg-blue-50     { background-color: rgb(30 58 138 / .3); }
+.dark .border-blue-200{ border-color: rgb(96 165 250 / .4); }
+.dark .text-blue-600  { color: #93C5FD; }
+
+.dark .bg-violet-50   { background-color: rgb(76 29 149 / .3); }
+.dark .border-violet-200 { border-color: rgb(167 139 250 / .4); }
+.dark .text-violet-600{ color: #C4B5FD; }
+
+/* Overlays / drawer */
+.dark .bg-slate-900\/20 { background-color: rgb(0 0 0 / .55); }
+.dark .shadow-xl { box-shadow: 0 20px 25px -5px rgb(0 0 0 / .6); }
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

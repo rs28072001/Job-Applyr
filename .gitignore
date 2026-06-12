@@ -47,6 +47,7 @@ data/*.db
 data/cv/
 backend/data/*.db
 backend/data/cv/
+backend/data/evidence/
 
 # Temporary files
 *.tmp

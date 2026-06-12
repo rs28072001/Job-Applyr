@@ -8,17 +8,20 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.keys import Keys
 
 from ..base_platform import JobListing, ApplicationResult
+from core.selectors import SELECTORS
+from core.statuses import FailureReason
 from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-SEL_EASY_APPLY_BTN = "button[class*='jobs-apply-button'], button[aria-label*='Easy Apply']"
-SEL_MODAL = "div[class*='jobs-easy-apply-modal'], div[class*='artdeco-modal']"
-SEL_NEXT_BTN = "button[aria-label='Continue to next step']"
-SEL_REVIEW_BTN = "button[aria-label='Review your application']"
-SEL_SUBMIT_BTN = "button[aria-label='Submit application']"
+_L = SELECTORS["linkedin"]
+SEL_EASY_APPLY_BTN = ", ".join(_L["easy_apply_button"])
+SEL_MODAL = ", ".join(_L["easy_apply_modal"])
+SEL_NEXT_BTN = ", ".join(_L["next_button"])
+SEL_REVIEW_BTN = ", ".join(_L["review_button"])
+SEL_SUBMIT_BTN = ", ".join(_L["submit_button"])
 SEL_CLOSE_BTN = "button[aria-label='Dismiss'], button[data-test-modal-close-btn]"
-SEL_ALREADY_APPLIED = "span[class*='artdeco-inline-feedback__message']"
+SEL_ALREADY_APPLIED = ", ".join(_L["already_applied"])
 SEL_ERROR_MSG = "p[class*='jobs-easy-apply-form-element__error']"
 SEL_PHONE_FIELD = "input[id*='phoneNumber'], input[aria-label*='Phone']"
 SEL_TEXT_FIELDS = "input[class*='artdeco-text-input--input'], textarea[class*='jobs-easy-apply']"
@@ -78,7 +81,9 @@ def apply_to_job(
     try:
         msg_el = driver.find_element(By.CSS_SELECTOR, SEL_ALREADY_APPLIED)
         if "applied" in msg_el.text.lower():
-            return ApplicationResult(success=False, status="skipped", error="already_applied")
+            return ApplicationResult(success=False, status="skipped",
+                                     failure_reason=FailureReason.ALREADY_APPLIED,
+                                     error="already_applied")
     except NoSuchElementException:
         pass
 
@@ -88,7 +93,10 @@ def apply_to_job(
             EC.element_to_be_clickable((By.CSS_SELECTOR, SEL_EASY_APPLY_BTN))
         )
     except TimeoutException:
-        return ApplicationResult(success=False, status="error", error="Easy Apply button not found")
+        # Selector drift or non-Easy-Apply page → human review, not a silent fail.
+        return ApplicationResult(success=False, status="manual_review",
+                                 failure_reason=FailureReason.APPLY_BUTTON_NOT_FOUND,
+                                 error="Easy Apply button not found (possible selector drift) — sent to review")
 
     try:
         driver.execute_script("arguments[0].click();", apply_btn)
@@ -142,7 +150,9 @@ def apply_to_job(
             driver.execute_script("arguments[0].click();", submit_btn)
             rate_limiter.wait_page_load()
         except TimeoutException:
-            return ApplicationResult(success=False, status="error", error="Submit button not found")
+            return ApplicationResult(success=False, status="failed",
+                                     failure_reason=FailureReason.UNSUPPORTED_FLOW,
+                                     error="Submit button not found in Easy Apply modal")
 
         # Close confirmation modal
         try:
@@ -164,4 +174,5 @@ def apply_to_job(
         except Exception:
             pass
         logger.error("LinkedIn apply error for %s: %s", listing.title, e)
-        return ApplicationResult(success=False, status="error", error=str(e))
+        return ApplicationResult(success=False, status="failed",
+                                 failure_reason=FailureReason.BROWSER_ERROR, error=str(e))

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { History, CheckCircle2, XCircle, AlertCircle, ExternalLink, Clock, Filter } from "lucide-react";
+import { History, ExternalLink, Clock, Filter, Download } from "lucide-react";
 import { api } from "../api/client";
 import type { SessionRecord, ApplicationRecord, PaginatedApplications } from "../api/types";
+import { ScorePill, StatusBadge, failureLabel } from "../components/ui";
 
 function statusMeta(s: string) {
   if (s === "completed") return { color:"text-emerald-600", bg:"bg-emerald-50", border:"border-emerald-200", dot:"bg-emerald-500" };
@@ -10,17 +11,10 @@ function statusMeta(s: string) {
   return                        { color:"text-red-600",     bg:"bg-red-50",     border:"border-red-200",     dot:"bg-red-500" };
 }
 
-function appStatusBadge(s: string) {
-  if (s === "applied")           return "bg-emerald-100 text-emerald-700 border border-emerald-200";
-  if (s === "skipped")           return "bg-slate-100 text-slate-500 border border-slate-200";
-  if (s === "skipped_external")  return "bg-amber-50 text-amber-700 border border-amber-200";
-  return "bg-red-50 text-red-600 border border-red-200";
-}
-
-function ScorePill({ score }: { score: number }) {
-  const color = score >= 75 ? "bg-emerald-100 text-emerald-700" : score >= 50 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600";
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>{score}</span>;
-}
+const STATUS_FILTERS = [
+  "applied", "applied_pending_confirmation", "skipped", "manual_review",
+  "email_drafted", "email_sent", "failed", "stopped",
+];
 
 export default function HistoryPage() {
   const [sessions, setSessions]   = useState<SessionRecord[]>([]);
@@ -126,16 +120,19 @@ export default function HistoryPage() {
                   Applications
                   <span className="ml-2 text-slate-400 font-normal">({total})</span>
                 </h2>
+                <a href={`/api/sessions/${selected}/report.csv`} download
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 border border-slate-200 hover:border-slate-300 bg-white text-slate-600 text-xs font-semibold rounded-lg">
+                  <Download className="w-3 h-3" /> Export CSV
+                </a>
                 <div className="flex items-center gap-2">
                   <Filter className="w-3.5 h-3.5 text-slate-400" />
                   <select value={statusFilter} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
                     className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600
                                bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">All statuses</option>
-                    <option value="applied">Applied</option>
-                    <option value="skipped">Skipped</option>
-                    <option value="skipped_external">External ATS</option>
-                    <option value="error">Error</option>
+                    {STATUS_FILTERS.map((s) => (
+                      <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -174,15 +171,13 @@ export default function HistoryPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-center">
-                          <ScorePill score={a.score} />
+                          <ScorePill score={a.recommendation ? a.score : undefined} />
                         </td>
                         <td className="px-4 py-3.5">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${appStatusBadge(a.status)}`}>
-                            {a.status}
-                          </span>
-                          {a.status === "applied"           && <CheckCircle2 className="inline w-3 h-3 text-emerald-500 ml-1" />}
-                          {a.status === "skipped"           && <XCircle      className="inline w-3 h-3 text-slate-400 ml-1" />}
-                          {a.status === "error"             && <AlertCircle  className="inline w-3 h-3 text-red-500 ml-1" />}
+                          <StatusBadge status={a.status} />
+                          {a.failure_reason && (
+                            <p className="text-[11px] text-slate-400 mt-0.5">{failureLabel(a.failure_reason)}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3.5 text-xs text-slate-400 whitespace-nowrap">
                           {new Date(a.timestamp).toLocaleDateString("en-IN", { day:"numeric", month:"short" })}

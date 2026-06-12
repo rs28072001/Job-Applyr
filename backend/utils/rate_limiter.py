@@ -57,6 +57,10 @@ class RateLimiter:
     def wait_after_apply(self) -> None:
         time.sleep(random.uniform(3, 6))
 
+    def wait_between_jobs(self) -> None:
+        """Human-paced pause between processing consecutive jobs."""
+        time.sleep(random.uniform(4, 9))
+
     def wait_page_load(self) -> None:
         time.sleep(random.uniform(0.5, 1.2))
 

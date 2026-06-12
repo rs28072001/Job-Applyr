@@ -3,6 +3,8 @@ from . import login, search, job_scraper, apply
 
 
 class LinkedInPlatform(BasePlatform):
+    name = "linkedin"
+
     def check_login(self) -> bool:
         return login.check_login(self.driver)
 
@@ -10,7 +12,11 @@ class LinkedInPlatform(BasePlatform):
         login.login(self.driver, self.config.linkedin_userid, self.config.linkedin_password)
 
     def search_jobs(self, keywords: list[str], location: str, max_jobs: int) -> list[JobListing]:
-        return search.search_jobs(self.driver, keywords, location, max_jobs, self.rate_limiter)
+        easy_apply_only = bool(getattr(self.config, "easy_apply_only", True))
+        date_posted_filter = getattr(self.config, "date_posted_filter", "any")
+        return search.search_jobs(self.driver, keywords, location, max_jobs,
+                                  self.rate_limiter, easy_apply_only=easy_apply_only,
+                                  date_posted_filter=date_posted_filter)
 
     def get_job_description(self, listing: JobListing) -> str:
         return job_scraper.get_job_description(self.driver, listing, self.rate_limiter)

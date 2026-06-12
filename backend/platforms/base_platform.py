@@ -33,16 +33,26 @@ class JobDetails:
 @dataclass
 class ApplicationResult:
     success: bool
-    status: str = "applied"
+    status: str = "applied"          # applied | skipped | failed | manual_review
     error: str = None
     external_url: str = None
+    failure_reason: str = ""         # see core.statuses.FailureReason
 
 
 class BasePlatform(ABC):
+    #: platform key used by the classifier ("naukri" / "linkedin")
+    name: str = ""
+
     def __init__(self, driver, config, rate_limiter):
         self.driver = driver
         self.config = config
         self.rate_limiter = rate_limiter
+
+    def collect_page_signals(self):
+        """Read apply-flow signals from the CURRENT page (no navigation,
+        no clicking, nothing hidden — visible page source only)."""
+        from core.page_signals import signals_from_driver
+        return signals_from_driver(self.driver, self.name)
 
     @abstractmethod
     def check_login(self) -> bool:

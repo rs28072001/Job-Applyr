@@ -7,20 +7,23 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from ..base_platform import JobListing, ApplicationResult
+from core.selectors import SELECTORS, TEXT_MARKERS
+from core.statuses import FailureReason
 from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-# ── apply button selectors ────────────────────────────────────────────────────
-SEL_APPLY_BTN       = "button[id='apply-button'], a[id='apply-button']"
-SEL_APPLY_BTN_ALT   = "button[class*='apply-button'], a[class*='apply-button']"
-SEL_EXTERNAL_BTN    = "button#company-site-button, button[class*='company-site-button']"
-SEL_ALREADY_APPLIED = "button[class*='already-applied'], span[class*='already-applied']"
-SEL_APPLIED_SUCCESS = "div[class*='apply-success'], div[class*='applied-banner'], span[class*='applied-message']"
+# ── apply button selectors (fallback lists from the central registry) ─────────
+_N = SELECTORS["naukri"]
+SEL_APPLY_BTN       = ", ".join(_N["internal_apply_button"][:2])
+SEL_APPLY_BTN_ALT   = ", ".join(_N["internal_apply_button"][2:])
+SEL_EXTERNAL_BTN    = ", ".join(_N["external_apply_button"])
+SEL_ALREADY_APPLIED = ", ".join(_N["already_applied"])
+SEL_APPLIED_SUCCESS = ", ".join(_N["apply_success"])
 SEL_CONFIRM_BTN     = "button.btn-primary, button[class*='confirm']"
 
 # ── chatbot drawer selectors (from actual Naukri HTML) ────────────────────────
-SEL_CHATBOT_DRAWER  = "div[class*='chatbot_Drawer']"
+SEL_CHATBOT_DRAWER  = ", ".join(_N["chatbot_drawer"])
 SEL_BOT_ITEMS       = "li.botItem, li[class*='botItem']"
 SEL_USER_OPTIONS    = "li[class*='userItem'] label, li[class*='userItem'] span[class*='option']"
 SEL_RADIO_INPUTS    = "li[class*='userItem'] input[type='radio']"
@@ -348,24 +351,30 @@ def apply_to_job(
 
     if _page_requires_login(driver):
         logger.warning("Naukri job page requires login before apply: %s", listing.title)
-        return ApplicationResult(success=False, status="error", error="Not logged in — job page shows login/register to apply")
+        return ApplicationResult(success=False, status="failed",
+                                 failure_reason=FailureReason.LOGIN_REQUIRED,
+                                 error="Not logged in — job page shows login/register to apply")
 
     # Check if already applied
     try:
         driver.find_element(By.CSS_SELECTOR, SEL_ALREADY_APPLIED)
         logger.info("Already applied: %s", listing.title)
-        return ApplicationResult(success=False, status="skipped", error="already_applied")
+        return ApplicationResult(success=False, status="skipped",
+                                 failure_reason=FailureReason.ALREADY_APPLIED,
+                                 error="already_applied")
     except NoSuchElementException:
         pass
 
-    # Detect "Apply on company site" button → capture URL and skip
+    # Detect "Apply on company site" button → never auto-drive a third-party
+    # ATS. Capture the visible URL and SAVE the job for the user automatically.
     try:
         driver.find_element(By.CSS_SELECTOR, SEL_EXTERNAL_BTN)
-        logger.info("External apply detected: %s", listing.title)
+        logger.info("External apply detected — saving job: %s", listing.title)
         external_url = _capture_external_url(driver, rate_limiter)
         return ApplicationResult(
             success=False,
-            status="skipped_external",
+            status="saved",
+            failure_reason=FailureReason.EXTERNAL_SITE,
             error="external_apply",
             external_url=external_url,
         )
@@ -387,7 +396,10 @@ def apply_to_job(
             continue
 
     if not apply_btn:
-        return ApplicationResult(success=False, status="error", error="Apply button not found")
+        # Selector drift or unexpected page state → human review, not a silent fail.
+        return ApplicationResult(success=False, status="manual_review",
+                                 failure_reason=FailureReason.APPLY_BUTTON_NOT_FOUND,
+                                 error="Apply button not found (possible selector drift) — sent to review")
 
     try:
         driver.execute_script("arguments[0].click();", apply_btn)
@@ -396,7 +408,9 @@ def apply_to_job(
         # Detect redirect to login page — means session expired / not logged in
         if _page_requires_login(driver):
             logger.warning("Redirected to login page after apply — not logged in: %s", listing.title)
-            return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
+            return ApplicationResult(success=False, status="failed",
+                                     failure_reason=FailureReason.LOGIN_REQUIRED,
+                                     error="Not logged in — redirected to login page")
 
         # Handle Naukri chatbot drawer if it appears
         _handle_chatbot(driver, llm, cv_data, rate_limiter)
@@ -411,7 +425,7 @@ def apply_to_job(
         except TimeoutException:
             pass
 
-        # Verify success indicator
+        # Verify success — selector fallbacks first, then visible-text markers.
         try:
             WebDriverWait(driver, 8).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, SEL_APPLIED_SUCCESS))
@@ -419,12 +433,41 @@ def apply_to_job(
             logger.info("Applied successfully: %s @ %s", listing.title, listing.company)
             return ApplicationResult(success=True, status="applied")
         except TimeoutException:
-            # Check once more if redirected to login
-            if _page_requires_login(driver):
-                return ApplicationResult(success=False, status="error", error="Not logged in — redirected to login page")
-            logger.warning("No success indicator after apply — marking as error: %s", listing.title)
-            return ApplicationResult(success=False, status="error", error="No success confirmation shown after applying")
+            pass
+
+        page_text = ""
+        try:
+            page_text = (driver.execute_script(
+                "return document.body ? document.body.innerText : ''") or "").lower()
+        except Exception:
+            pass
+
+        if any(p in page_text for p in TEXT_MARKERS["apply_success"]):
+            logger.info("Applied (text confirmation): %s @ %s", listing.title, listing.company)
+            return ApplicationResult(success=True, status="applied")
+
+        # Real failure states
+        if _page_requires_login(driver):
+            return ApplicationResult(success=False, status="failed",
+                                     failure_reason=FailureReason.LOGIN_REQUIRED,
+                                     error="Not logged in — redirected to login page")
+        if any(p in page_text for p in TEXT_MARKERS["challenge"]):
+            return ApplicationResult(success=False, status="failed",
+                                     failure_reason=FailureReason.CAPTCHA_OR_CHALLENGE,
+                                     error="Challenge page shown after apply click")
+        if any(p in page_text for p in TEXT_MARKERS["apply_error"]):
+            return ApplicationResult(success=False, status="failed",
+                                     failure_reason=FailureReason.CONFIRMATION_MISSING,
+                                     error="Platform showed an error after the apply click")
+
+        # Click succeeded and nothing bad appeared — the apply almost certainly
+        # went through, the platform just didn't render a banner we recognise.
+        logger.info("Apply click OK, no explicit confirmation: %s — applied_pending_confirmation",
+                    listing.title)
+        return ApplicationResult(success=True, status="applied_pending_confirmation",
+                                 error="No explicit confirmation banner; no error/login/challenge either")
 
     except Exception as e:
         logger.error("Error applying to %s: %s", listing.title, e)
-        return ApplicationResult(success=False, status="error", error=str(e))
+        return ApplicationResult(success=False, status="failed",
+                                 failure_reason=FailureReason.BROWSER_ERROR, error=str(e))

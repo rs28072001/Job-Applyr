@@ -37,6 +37,13 @@ class Config:
     job_target: int
     location: str
     platform_choice: str
+    # Safer-automation controls
+    easy_apply_only: bool = True            # platform-native apply flows only
+    include_external_review: bool = True    # external jobs → manual review queue
+    outreach_mode: str = "draft_only"       # off | draft_only | send_after_approval
+    hide_previously_skipped: bool = True
+    auto_ignore_skipped: bool = True
+    date_posted_filter: str = "any"         # any | 24h | 3d | 7d | 14d
 
 
 def load_config() -> Config:

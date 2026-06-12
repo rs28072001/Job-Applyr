@@ -1,328 +1,415 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Square, ArrowLeft, ExternalLink, TrendingUp, CheckCircle2, XCircle, AlertCircle, Clock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Square, ExternalLink, CheckCircle2, XCircle, AlertCircle, AlertTriangle,
+  Inbox, Activity, ListChecks, Mail, Loader2, Search, OctagonX, Download,
+} from "lucide-react";
 import { api } from "../api/client";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useSessionStore, type JobEntry } from "../store/sessionStore";
+import type {
+  ApplicationRecord, PaginatedApplications, ReviewQueueResponse, SessionStatusResponse,
+} from "../api/types";
+import {
+  Card, CardHeader, ClassificationBadge, EmptyState, ScorePill, StatusBadge, failureLabel,
+} from "../components/ui";
+import JobDetailDrawer from "../components/JobDetailDrawer";
 
-/* ── Stat card ──────────────────────────────────────────────────────────── */
-function StatCard({ label, value, icon: Icon, color }: {
-  label: string; value: string | number; icon: React.ElementType; color: string;
+/* ── Summary cards ───────────────────────────────────────────────────────── */
+
+function SummaryCard({ label, value, sub, icon: Icon, tone }: {
+  label: string; value: number | string; sub?: string; icon: React.ElementType; tone: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon className="w-4 h-4" />
-        </div>
+    <Card className="px-4 py-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+        <Icon className={`w-3.5 h-3.5 ${tone}`} />
       </div>
-      <p className="text-3xl font-extrabold text-slate-900">{value}</p>
-    </div>
+      <p className="text-2xl font-bold text-slate-900 mt-1 leading-none">{value}</p>
+      {sub && <p className="text-[11px] text-slate-400 mt-1">{sub}</p>}
+    </Card>
   );
 }
 
-/* ── Login chip ─────────────────────────────────────────────────────────── */
-function LoginChip({ platform, status }: { platform: string; status?: boolean }) {
-  const cfg = status === true  ? { bg:"bg-emerald-50",  border:"border-emerald-200", dot:"bg-emerald-500",  text:"text-emerald-700", label:"✓ Logged in"  }
-            : status === false ? { bg:"bg-red-50",      border:"border-red-200",     dot:"bg-red-500",     text:"text-red-700",     label:"✗ Failed"     }
-            :                    { bg:"bg-slate-50",    border:"border-slate-200",   dot:"bg-slate-300",   text:"text-slate-500",   label:"Waiting…"     };
-  return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${cfg.bg} ${cfg.border}`}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot} ${status === undefined ? "animate-pulse" : ""}`} />
-      <span className={`text-xs font-semibold capitalize ${cfg.text}`}>{platform}</span>
-      <span className={`text-xs ${cfg.text} opacity-80`}>{cfg.label}</span>
-    </div>
-  );
-}
+/* ── Session state banner ────────────────────────────────────────────────── */
 
-/* ── Score bar ──────────────────────────────────────────────────────────── */
-function ScoreBar({ score }: { score?: number }) {
-  if (score === undefined) return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full w-1/3 bg-slate-200 rounded-full animate-pulse" />
-      </div>
-      <span className="text-xs text-slate-400 w-6">…</span>
-    </div>
-  );
-  const color = score >= 75 ? "bg-emerald-500" : score >= 50 ? "bg-amber-400" : "bg-red-400";
-  const textColor = score >= 75 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-500";
+function SessionBanner() {
+  const uiState = useSessionStore((s) => s.uiState);
+  const map = {
+    idle:      null,
+    running:   { cls: "bg-emerald-50 border-emerald-200 text-emerald-700", dot: "bg-emerald-500 animate-pulse", label: "Running" },
+    completed: { cls: "bg-slate-50 border-slate-200 text-slate-600", dot: "bg-slate-400", label: "Completed" },
+    stopped:   { cls: "bg-orange-50 border-orange-200 text-orange-700", dot: "bg-orange-500", label: "Stopped" },
+    failed:    { cls: "bg-red-50 border-red-200 text-red-700", dot: "bg-red-500", label: "Failed" },
+  } as const;
+  const meta = map[uiState];
+  if (!meta) return null;
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${color}`}
-             style={{ width: `${Math.min(100, score)}%` }} />
-      </div>
-      <span className={`text-xs font-bold w-6 text-right ${textColor}`}>{score}</span>
-    </div>
-  );
-}
-
-/* ── Status badge ───────────────────────────────────────────────────────── */
-function StatusBadge({ status }: { status?: string }) {
-  const map: Record<string, string> = {
-    applied:          "bg-emerald-100 text-emerald-700 border border-emerald-200",
-    skipped:          "bg-slate-100 text-slate-500 border border-slate-200",
-    skipped_external: "bg-amber-50 text-amber-700 border border-amber-200",
-    error:            "bg-red-50 text-red-600 border border-red-200",
-  };
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${map[status ?? ""] ?? "bg-blue-50 text-blue-500 border border-blue-100"}`}>
-      {status ?? "analysing"}
+    <span className={`inline-flex items-center gap-1.5 border text-xs font-semibold px-2 py-0.5 rounded ${meta.cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
     </span>
   );
 }
 
-/* ── Skill chips ─────────────────────────────────────────────────────────── */
-function Skills({ items, color }: { items?: string[]; color: string }) {
-  if (!items?.length) return null;
-  return (
-    <div className="flex flex-wrap gap-1 mt-1.5">
-      {items.slice(0, 6).map((s) => (
-        <span key={s} className={`text-xs px-1.5 py-0.5 rounded-md ${color}`}>{s}</span>
-      ))}
-    </div>
-  );
-}
-
 /* ── Job row ─────────────────────────────────────────────────────────────── */
-function JobRow({ job, isNew }: { job: JobEntry; isNew: boolean }) {
+
+function JobRow({ job, onClick }: { job: JobEntry; onClick: () => void }) {
   const initials = (job.company || "?").slice(0, 2).toUpperCase();
   const hue = ((job.company.charCodeAt(0) || 65) * 47) % 360;
-  const [imgError, setImgError] = React.useState(false);
-  const showLogo = job.logo_url && !imgError;
-
   return (
-    <div className={`px-5 py-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors
-                     ${isNew ? "bg-indigo-50/30" : ""}`}>
-      <div className="flex items-start gap-4">
-        {/* Company avatar — real logo if available, else initials */}
-        {showLogo ? (
-          <img
-            src={job.logo_url}
-            alt={job.company}
-            onError={() => setImgError(true)}
-            className="w-9 h-9 rounded-xl object-contain bg-white border border-slate-100 shrink-0"
-          />
-        ) : (
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-               style={{ backgroundColor: `hsl(${hue},55%,55%)` }}>
-            {initials}
-          </div>
-        )}
-
-        {/* Main content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div className="min-w-0">
-              <p className="font-semibold text-slate-900 text-sm truncate">{job.title}</p>
-              <p className="text-xs text-slate-500">{job.company}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-slate-400">{job.idx}/{job.total}</span>
-              <StatusBadge status={job.status} />
-              {job.url && (
-                <a href={job.url} target="_blank" rel="noreferrer"
-                   className="text-slate-300 hover:text-indigo-500">
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-2 max-w-xs">
-            <ScoreBar score={job.score} />
-          </div>
-
-          {job.rationale && (
-            <p className="text-xs text-slate-400 mt-1.5 line-clamp-1 italic">{job.rationale}</p>
-          )}
-
-          <Skills items={job.matched} color="bg-emerald-50 text-emerald-700" />
-          <Skills items={job.missing} color="bg-red-50 text-red-600" />
+    <button onClick={onClick}
+      className="w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+          style={{ backgroundColor: `hsl(${hue},45%,52%)` }}>
+          {initials}
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-slate-900 text-[13px] truncate">{job.title}</p>
+            <span className="text-[11px] text-slate-400 shrink-0">{job.company}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            <ClassificationBadge classification={job.classification} />
+            {job.failure_reason && (
+              <span className="text-[11px] text-slate-400 truncate">{failureLabel(job.failure_reason)}</span>
+            )}
+          </div>
+        </div>
+        <ScorePill score={job.score} />
+        <StatusBadge status={job.status} />
+        {job.url && (
+          <a href={job.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+            aria-label="Open job posting" className="text-slate-300 hover:text-indigo-500 shrink-0">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
-    </div>
+    </button>
   );
 }
 
-/* ── Log feed ─────────────────────────────────────────────────────────────── */
-function LogFeed() {
-  const logs     = useSessionStore((s) => s.logs);
-  const bottomRef= useRef<HTMLDivElement>(null);
+/* ── Activity timeline ───────────────────────────────────────────────────── */
+
+function ActivityTimeline() {
+  const logs = useSessionStore((s) => s.logs);
+  const isRunning = useSessionStore((s) => s.isRunning);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs.length]);
 
-  const lvlColor = (l: string) =>
-    l === "error"   ? "text-red-400" :
-    l === "success" ? "text-emerald-400" :
-    l === "warning" ? "text-amber-400" : "text-slate-400";
+  const dot = (l: string) =>
+    l === "error" ? "bg-red-400" :
+    l === "success" ? "bg-emerald-400" :
+    l === "warning" ? "bg-amber-400" : "bg-slate-300";
 
   return (
-    <div className="bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex flex-col">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800">
-        <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/60" />
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/60" />
-        </div>
-        <span className="text-slate-500 text-xs font-mono ml-1">live log</span>
-        <span className="ml-auto text-slate-600 text-xs font-mono">{logs.length} lines</span>
-      </div>
-      <div className="overflow-y-auto max-h-64 px-4 py-3 font-mono text-xs space-y-0.5">
+    <Card className="flex flex-col overflow-hidden">
+      <CardHeader title="Live activity" count={logs.length} />
+      <div className="overflow-y-auto flex-1 max-h-[24rem] px-4 py-2">
         {logs.length === 0 ? (
-          <p className="text-slate-600 italic">Waiting for session events…</p>
+          <EmptyState icon={Activity} title={isRunning ? "Waiting for events…" : "No activity yet"}
+            hint={isRunning ? undefined : "Start a session from Setup to see live progress."} />
         ) : (
-          logs.map((l, i) => (
-            <div key={i}>
-              <span className="text-slate-700 select-none mr-2">{l.ts}</span>
-              <span className={lvlColor(l.level)}>{l.msg}</span>
-            </div>
-          ))
+          <ol className="relative">
+            {logs.map((l, i) => (
+              <li key={i} className="flex gap-2.5 py-1">
+                <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${dot(l.level)}`} />
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-300 font-mono mr-1.5">{l.ts}</span>
+                  <span className={`text-xs ${l.level === "error" ? "text-red-600" : "text-slate-600"}`}>{l.msg}</span>
+                </div>
+              </li>
+            ))}
+            <div ref={bottomRef} />
+          </ol>
         )}
-        <div ref={bottomRef} />
+      </div>
+    </Card>
+  );
+}
+
+/* ── Review queue snapshot ───────────────────────────────────────────────── */
+
+function ReviewSnapshot({ queue }: { queue: ReviewQueueResponse | null }) {
+  const savedCount = queue?.saved?.length ?? 0;
+  const reviewCount = queue?.manual_review.length ?? 0;
+  const draftCount = queue?.drafts.length ?? 0;
+  return (
+    <Card>
+      <CardHeader title="Saved & Skipped" right={
+        <Link to="/review" className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">Open →</Link>
+      } />
+      {savedCount + reviewCount + draftCount === 0 ? (
+        <EmptyState icon={Inbox} title="Nothing here yet"
+          hint="External-site jobs are saved automatically with their link — they never block the session." />
+      ) : (
+        <div className="px-4 py-3 grid grid-cols-3 gap-2">
+          <Link to="/review" className="border border-sky-200 bg-sky-50 rounded-lg px-3 py-2 hover:bg-sky-100 transition-colors">
+            <p className="text-lg font-bold text-sky-700 leading-none">{savedCount}</p>
+            <p className="text-[11px] text-sky-600 mt-1">Saved external jobs</p>
+          </Link>
+          <Link to="/review" className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2 hover:bg-amber-100 transition-colors">
+            <p className="text-lg font-bold text-amber-700 leading-none">{reviewCount}</p>
+            <p className="text-[11px] text-amber-600 mt-1">Needs attention</p>
+          </Link>
+          <Link to="/review" className="border border-teal-200 bg-teal-50 rounded-lg px-3 py-2 hover:bg-teal-100 transition-colors">
+            <p className="text-lg font-bold text-teal-700 leading-none">{draftCount}</p>
+            <p className="text-[11px] text-teal-600 mt-1">Email drafts</p>
+          </Link>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+interface SystemAlert {
+  id: string;
+  severity: "error" | "warning";
+  title: string;
+  detail: string;
+}
+
+function AlertBanner({ alert }: { alert: SystemAlert }) {
+  const isError = alert.severity === "error";
+  return (
+    <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 ${
+      isError ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+      {isError
+        ? <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+        : <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />}
+      <div className="min-w-0">
+        <p className={`text-xs font-semibold ${isError ? "text-red-700" : "text-amber-700"}`}>{alert.title}</p>
+        <p className={`text-[11px] mt-0.5 ${isError ? "text-red-600" : "text-amber-600"}`}>{alert.detail}</p>
       </div>
     </div>
   );
 }
 
-/* ── Dashboard page ────────────────────────────────────────────────────── */
+function toJobEntry(a: ApplicationRecord): JobEntry {
+  return {
+    appId: a.id, idx: 0, total: 0,
+    title: a.job_title, company: a.company, url: a.job_url,
+    // Score is only meaningful once the LLM actually scored the job:
+    // show — for unscored rows, and 0 only when the LLM returned 0.
+    score: a.recommendation ? a.score : undefined,
+    rationale: a.rationale || undefined,
+    matched: a.matched_skills, missing: a.missing_skills,
+    recommendation: a.recommendation || undefined,
+    status: a.status, classification: a.classification || undefined,
+    failure_reason: a.failure_reason || undefined,
+    external_url: a.external_site_url || undefined,
+    exp_required: a.experience_required || undefined,
+    salary: a.salary || undefined,
+  };
+}
+
+/* ── Dashboard ───────────────────────────────────────────────────────────── */
 
 export default function DashboardPage() {
   useWebSocket();
 
-  const navigate     = useNavigate();
-  const isRunning    = useSessionStore((s) => s.isRunning);
-  const setRunning   = useSessionStore((s) => s.setRunning);
-  const loginStatus  = useSessionStore((s) => s.loginStatus);
+  const isRunning = useSessionStore((s) => s.isRunning);
+  const uiState = useSessionStore((s) => s.uiState);
+  const setRunning = useSessionStore((s) => s.setRunning);
+  const setStopped = useSessionStore((s) => s.setStopped);
+  const setCounts = useSessionStore((s) => s.setCounts);
+  const jobs = useSessionStore((s) => s.jobs);
+  const counts = useSessionStore((s) => s.counts);
+  const target = useSessionStore((s) => s.target);
+  const loginStatus = useSessionStore((s) => s.loginStatus);
+
   const [stopping, setStopping] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobEntry | null>(null);
+  const [queue, setQueue] = useState<ReviewQueueResponse | null>(null);
+  const [persistedJobs, setPersistedJobs] = useState<JobEntry[]>([]);
+  const [alerts, setAlerts] = useState<SystemAlert[]>([]);
+  const [reportSessionId, setReportSessionId] = useState<number | null>(null);
 
-  // Sync running state from backend on mount (handles page refresh)
+  // Poll persisted status/counters — counters always reflect DB rows.
   useEffect(() => {
-    fetch("/api/session/status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { is_running: boolean; session_id: number | null } | null) => {
-        if (data?.is_running) setRunning(true, data.session_id);
-      })
-      .catch(() => {});
-  }, [setRunning]);
-  const jobs         = useSessionStore((s) => s.jobs);
-  const appliedCount = useSessionStore((s) => s.appliedCount);
-  const target       = useSessionStore((s) => s.target);
-  const logs         = useSessionStore((s) => s.logs);
+    let active = true;
+    const tick = async () => {
+      try {
+        const r = await api.get<SessionStatusResponse>("/api/session/status");
+        if (!active) return;
+        setCounts(r.data.counts ?? {});
+        if (r.data.is_running) setRunning(true, r.data.session_id);
+        // Hydrate the job table from persisted rows (latest session) so the
+        // dashboard survives refreshes and shows final lifecycle states.
+        const sessId = r.data.session?.id;
+        setReportSessionId(sessId ?? null);
+        if (sessId) {
+          const h = await api.get<PaginatedApplications>("/api/history", {
+            params: { session_id: sessId, per_page: 100 },
+          });
+          if (active) setPersistedJobs(h.data.records.map(toJobEntry).reverse());
+        }
+      } catch { /* backend offline */ }
+      try {
+        const q = await api.get<ReviewQueueResponse>("/api/review/queue");
+        if (active) setQueue(q.data);
+      } catch { /* ignore */ }
+      try {
+        const a = await api.get<{ alerts: SystemAlert[] }>("/api/alerts");
+        if (active) setAlerts(a.data.alerts ?? []);
+      } catch { /* ignore */ }
+    };
+    tick();
+    const id = setInterval(tick, 4000);
+    return () => { active = false; clearInterval(id); };
+  }, [setCounts, setRunning]);
 
-  const applied   = jobs.filter((j) => j.status === "applied").length;
-  const skipped   = jobs.filter((j) => j.status?.startsWith("skipped")).length;
-  const errors    = jobs.filter((j) => j.status === "error").length;
-  const pct       = target > 0 ? Math.round(((appliedCount || applied) / target) * 100) : 0;
+  async function stopSession() {
+    setStopping(true);
+    setStopped(); // immediate UI feedback
+    try {
+      await api.post("/api/session/stop");
+    } finally {
+      setStopping(false);
+    }
+  }
+
+  // Live WS rows take priority; fall back to persisted rows after refresh.
+  const tableJobs = jobs.length > 0 ? jobs : persistedJobs;
+
+  const c = (k: string) => counts[k] ?? 0;
+  const applied = c("applied") + c("applied_pending_confirmation");
+  const inFlight = c("queued") + c("fetching") + c("scoring") + c("applying");
+  const reviewable = c("saved") + c("manual_review") + c("email_drafted");
+  const failed = c("failed") + c("stopped");
+  const total = counts["total"] ?? tableJobs.length;
+  const pct = target > 0 ? Math.round((applied / target) * 100) : 0;
 
   return (
-    <div className="p-8 space-y-6 max-w-5xl mx-auto">
+    <div className="p-6 space-y-4 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/setup")}
-            className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900">Live Dashboard</h1>
-              {isRunning && (
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200
-                                 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Running
-                </span>
-              )}
-              {!isRunning && logs.length > 0 && (
-                <span className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200
-                                 text-slate-600 text-xs font-semibold px-2.5 py-1 rounded-full">
-                  Completed
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-slate-500 mt-0.5">Real-time job application progress</p>
-          </div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-slate-900">Command Center</h1>
+          <SessionBanner />
         </div>
-        {isRunning && (
-          <button onClick={async () => {
-              setStopping(true);
-              try {
-                await api.post("/api/session/stop");
-                setRunning(false, null);
-              } finally {
-                setStopping(false);
-              }
-            }}
-            disabled={stopping}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700
-                       disabled:opacity-60 disabled:hover:bg-red-600
-                       text-white text-sm font-semibold rounded-xl shadow-sm shadow-red-200">
-            <Square className="w-3.5 h-3.5" /> {stopping ? "Stopping..." : "Stop session"}
-          </button>
-        )}
-      </div>
-
-      {/* Login status */}
-      <div className="flex gap-3 flex-wrap">
-        {["naukri", "linkedin"].map((p) => (
-          <LoginChip key={p} platform={p} status={loginStatus[p]} />
-        ))}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Analysed"  value={jobs.length} icon={TrendingUp}     color="bg-indigo-50 text-indigo-600" />
-        <StatCard label="Applied"   value={applied}      icon={CheckCircle2}   color="bg-emerald-50 text-emerald-600" />
-        <StatCard label="Skipped"   value={skipped}      icon={XCircle}        color="bg-slate-100 text-slate-500" />
-        <StatCard label="Errors"    value={errors}       icon={AlertCircle}    color="bg-red-50 text-red-500" />
-      </div>
-
-      {/* Progress bar */}
-      {target > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-semibold text-slate-700">Progress toward target</span>
-            </div>
-            <span className="text-sm font-bold text-slate-900">{appliedCount || applied} / {target} applied</span>
-          </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-700
-              ${pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`}
-              style={{ width: `${Math.min(100, pct)}%` }} />
-          </div>
-          <p className="text-xs text-slate-400 mt-1.5">{pct}% complete</p>
-        </div>
-      )}
-
-      {/* Jobs table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">Jobs Analysed</h2>
-          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{jobs.length}</span>
-        </div>
-        <div className="max-h-[28rem] overflow-y-auto">
-          {jobs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-              <TrendingUp className="w-10 h-10 mb-3 opacity-20" />
-              <p className="text-sm">{isRunning ? "Searching for jobs…" : "No jobs found yet"}</p>
-            </div>
+        <div className="flex items-center gap-2">
+          {Object.entries(loginStatus).map(([p, ok]) => (
+            <span key={p} className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-medium capitalize
+              ${ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-600"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-red-500"}`} />
+              {p}
+            </span>
+          ))}
+          {reportSessionId && (
+            <a href={`/api/sessions/${reportSessionId}/report.csv`} download
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-300 bg-white text-slate-600 text-xs font-semibold rounded-lg">
+              <Download className="w-3 h-3" /> Export report
+            </a>
+          )}
+          {isRunning ? (
+            <button onClick={stopSession} disabled={stopping}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-60
+                         text-white text-xs font-semibold rounded-lg">
+              {stopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3 h-3" />}
+              {stopping ? "Stopping…" : "Stop session"}
+            </button>
           ) : (
-            jobs.map((job, i) => (
-              <JobRow key={i} job={job} isNew={i === jobs.length - 1 && isRunning} />
-            ))
+            <Link to="/setup"
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg">
+              New session
+            </Link>
           )}
         </div>
       </div>
 
-      {/* Log feed */}
-      <LogFeed />
+      {/* System alerts: broken selectors, missing SMTP, high failure rate */}
+      {alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map((a) => <AlertBanner key={a.id} alert={a} />)}
+        </div>
+      )}
+
+      {/* Summary cards — counters from persisted rows */}
+      <div className="grid grid-cols-5 gap-3">
+        <SummaryCard label="Applied" value={applied} sub={target ? `${pct}% of target ${target}` : undefined}
+          icon={CheckCircle2} tone="text-emerald-500" />
+        <SummaryCard label="In progress" value={inFlight} icon={Loader2} tone="text-indigo-500" />
+        <SummaryCard label="Saved / attention" value={reviewable} sub="Non-blocking"
+          icon={Inbox} tone="text-sky-500" />
+        <SummaryCard label="Skipped" value={c("skipped")} icon={XCircle} tone="text-slate-400" />
+        <SummaryCard label="Failed / stopped" value={failed} icon={AlertCircle} tone="text-red-500" />
+      </div>
+
+      {/* Progress */}
+      {target > 0 && (
+        <Card className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-600">Progress toward target</span>
+            <span className="text-xs font-bold text-slate-900">{applied} / {target} applied</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-700 ${pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`}
+              style={{ width: `${Math.min(100, pct)}%` }} />
+          </div>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-3 gap-4">
+        {/* Job table */}
+        <Card className="col-span-2 overflow-hidden">
+          <CardHeader title="Jobs this session" count={total} right={
+            <span className="text-[11px] text-slate-400 flex items-center gap-1">
+              <ListChecks className="w-3 h-3" /> click a row for details
+            </span>
+          } />
+          <div className="max-h-[28rem] overflow-y-auto">
+            {tableJobs.length === 0 ? (
+              uiState === "running" ? (
+                <EmptyState icon={Search} title="Searching for jobs…"
+                  hint="Listings appear here as soon as they are found." />
+              ) : uiState === "stopped" ? (
+                <EmptyState icon={OctagonX} title="Session stopped"
+                  hint="Start a new session from Setup when you're ready." />
+              ) : uiState === "failed" ? (
+                <EmptyState icon={AlertCircle} title="Session failed"
+                  hint="Check the activity timeline for the error, then try again." />
+              ) : uiState === "completed" ? (
+                <EmptyState icon={CheckCircle2} title="Session finished"
+                  hint="No jobs in this run — see History for past sessions." />
+              ) : (
+                <EmptyState icon={Inbox} title="No active session"
+                  hint="Launch a session from Setup to populate the command center."
+                  action={<Link to="/setup" className="text-xs font-semibold text-indigo-600 hover:text-indigo-700">Go to Setup →</Link>} />
+              )
+            ) : (
+              tableJobs.map((job, i) => (
+                <JobRow key={job.appId ?? `i-${i}`} job={job} onClick={() => setSelectedJob(job)} />
+              ))
+            )}
+          </div>
+        </Card>
+
+        {/* Right column */}
+        <div className="space-y-4">
+          <ReviewSnapshot queue={queue} />
+          <ActivityTimeline />
+        </div>
+      </div>
+
+      {/* Email drafts hint */}
+      {c("email_drafted") > 0 && (
+        <Card className="px-4 py-3 flex items-center gap-3 border-sky-200">
+          <Mail className="w-4 h-4 text-sky-600 shrink-0" />
+          <p className="text-xs text-slate-600 flex-1">
+            {c("email_drafted")} outreach draft{c("email_drafted") > 1 ? "s" : ""} ready (optional) — drafts are
+            never sent automatically.
+          </p>
+          <Link to="/review" className="text-xs font-semibold text-sky-700 hover:text-sky-800">View drafts →</Link>
+        </Card>
+      )}
+
+      {selectedJob && <JobDetailDrawer job={selectedJob} onClose={() => setSelectedJob(null)} />}
     </div>
   );
 }

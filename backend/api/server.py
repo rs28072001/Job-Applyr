@@ -50,12 +50,15 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from api.routes import auth, config, cv, session, history, ws
+    from api.routes import auth, config, cv, session, history, review, reports, ignored_jobs, ws
     app.include_router(auth.router)
     app.include_router(config.router)
     app.include_router(cv.router)
     app.include_router(session.router)
     app.include_router(history.router)
+    app.include_router(review.router)
+    app.include_router(reports.router)
+    app.include_router(ignored_jobs.router)
     app.include_router(ws.router)
 
     @app.get("/api/health")

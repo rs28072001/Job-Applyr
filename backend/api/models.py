@@ -50,6 +50,19 @@ class Config(Base):
     port_num              = Column(Integer, default=9222)
     max_jobs_per_hour     = Column(Integer, default=30)
     max_jobs_per_day      = Column(Integer, default=150)
+    # Safer-automation defaults
+    easy_apply_only         = Column(Boolean, default=True)   # platform-native flows only
+    include_external_review = Column(Boolean, default=True)   # external jobs → review queue
+    outreach_mode           = Column(String,  default="draft_only")  # off | draft_only | send_after_approval
+    # Optional SMTP (only used in send_after_approval mode, after explicit approval)
+    smtp_host             = Column(String, default="")
+    smtp_port             = Column(Integer, default=587)
+    smtp_username         = Column(String, default="")
+    smtp_password         = Column(String, default="")
+    smtp_from             = Column(String, default="")
+    hide_previously_skipped = Column(Boolean, default=True)
+    auto_ignore_skipped     = Column(Boolean, default=True)
+    date_posted_filter      = Column(String,  default="any")
     updated_at            = Column(DateTime, default=_now, onupdate=_now)
 
 
@@ -83,6 +96,12 @@ class Session(Base):
     job_target           = Column(Integer, default=10)
     confidence_threshold = Column(Integer, default=75)
     keywords             = Column(JSON,    default=list)
+    easy_apply_only         = Column(Boolean, default=True)
+    include_external_review = Column(Boolean, default=True)
+    outreach_mode           = Column(String,  default="draft_only")
+    hide_previously_skipped = Column(Boolean, default=True)
+    auto_ignore_skipped     = Column(Boolean, default=True)
+    date_posted_filter      = Column(String,  default="any")
     started_at           = Column(DateTime, default=_now)
     ended_at             = Column(DateTime, nullable=True)
     applied              = Column(Integer, default=0)
@@ -115,6 +134,92 @@ class Application(Base):
     external_site_url   = Column(String,  default="")
     matched_skills      = Column(JSON,    default=list)
     missing_skills      = Column(JSON,    default=list)
-    status              = Column(String,  default="skipped")  # applied|skipped|skipped_external|error
+    # Lifecycle (see core/statuses.py):
+    # queued|fetching|scoring|skipped|applying|applied|manual_review|
+    # email_drafted|email_sent|failed|stopped
+    status              = Column(String,  default="queued", index=True)
+    # platform_easy_apply|platform_internal_apply|external_ats|
+    # email_outreach_candidate|manual_review|unsupported
+    classification      = Column(String,  default="")
+    # login_required|apply_button_not_found|external_site|captcha_or_challenge|
+    # confirmation_missing|unsupported_flow|...
+    failure_reason      = Column(String,  default="")
+    recommendation      = Column(String,  default="")   # LLM: apply | skip
+    rationale           = Column(Text,    default="")   # LLM rationale
     error_message       = Column(Text,    nullable=True)
+    evidence_path       = Column(String,  default="")   # failure evidence dir (screenshot + page text)
     timestamp           = Column(DateTime, default=_now)
+    updated_at          = Column(DateTime, default=_now, onupdate=_now)
+
+
+class IgnoredJob(Base):
+    """Jobs that should be skipped in future sessions after a stable skip.
+
+    The fingerprint prefers an exact URL when available, otherwise falls back
+    to platform + normalized company + normalized title. Rows are local and
+    reversible from the UI.
+    """
+    __tablename__ = "ignored_jobs"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    ignored_at      = Column(DateTime, default=_now, index=True)
+    platform        = Column(String, default="", index=True)
+    company         = Column(String, default="")
+    job_title       = Column(String, default="")
+    job_url         = Column(String, default="")
+    job_fingerprint = Column(String, default="", unique=True, index=True)
+    ignore_type     = Column(String, default="auto_skip")  # auto_skip | manual
+    ignore_reason   = Column(String, default="")
+    score           = Column(Integer, default=0)
+    status          = Column(String, default="active")     # active | removed | expired
+    expires_at      = Column(DateTime, nullable=True, index=True)
+
+
+class OutreachDraft(Base):
+    """A reviewed-before-send recruiter email draft.
+
+    Emails are discovered ONLY from visible public job content. Drafts are
+    never sent automatically — sending requires explicit user approval and
+    outreach_mode == send_after_approval."""
+    __tablename__ = "outreach_drafts"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    application_id   = Column(Integer, ForeignKey("applications.id"), nullable=True, index=True)
+    session_id       = Column(Integer, ForeignKey("sessions.id"), nullable=True, index=True)
+    recruiter_email  = Column(String,  default="")
+    email_source     = Column(String,  default="")   # mailto | visible_text
+    email_source_url = Column(String,  default="")   # page the address was found on
+    subject          = Column(String,  default="")
+    body             = Column(Text,    default="")
+    status           = Column(String,  default="draft")  # draft|approved|sent|discarded
+    created_at       = Column(DateTime, default=_now)
+    updated_at       = Column(DateTime, default=_now, onupdate=_now)
+    sent_at          = Column(DateTime, nullable=True)
+
+
+class OutreachSendLog(Base):
+    """Immutable audit trail: every approved send (SMTP or user-confirmed)."""
+    __tablename__ = "outreach_send_log"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    draft_id        = Column(Integer, ForeignKey("outreach_drafts.id"), nullable=True)
+    application_id  = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    session_id      = Column(Integer, ForeignKey("sessions.id"), nullable=True)
+    job_title       = Column(String, default="")
+    company         = Column(String, default="")
+    recipient       = Column(String, default="")
+    subject         = Column(String, default="")
+    method          = Column(String, default="smtp")   # smtp | user_mail_client
+    sent_at         = Column(DateTime, default=_now)
+
+
+class AuditEvent(Base):
+    """Session audit log — append-only record of every meaningful action."""
+    __tablename__ = "audit_events"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    session_id  = Column(Integer, ForeignKey("sessions.id"), nullable=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    event_type  = Column(String, default="")   # session_started|status_change|backoff|stop|...
+    detail      = Column(JSON,   default=dict)
+    created_at  = Column(DateTime, default=_now)
