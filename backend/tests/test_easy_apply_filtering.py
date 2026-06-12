@@ -6,6 +6,7 @@ from core.job_classifier import classify_job, route_classification, AUTO_APPLY_C
 from core.page_signals import signals_from_html
 from core.statuses import AppStatus, FailureReason, JobClassification
 from platforms.linkedin.search import build_search_url
+from platforms.base_platform import JobListing
 
 
 class TestLinkedInEasyApplyFilter:
@@ -23,6 +24,19 @@ class TestLinkedInEasyApplyFilter:
         url = build_search_url(["QA Engineer"], "New Delhi")
         assert "QA+Engineer" in url and "New+Delhi" in url
 
+    def test_search_wrapper_queries_every_keyword(self):
+        from platforms.linkedin.platform import _search_each_keyword
+        calls = []
+
+        def search_one(keyword, _limit):
+            calls.append(keyword)
+            return [JobListing(keyword, "Acme", "India", f"https://x/{keyword}", "linkedin")]
+
+        rows = _search_each_keyword(search_one, ["DevOps Engineer", "Cloud Engineer", "SRE"], 2)
+
+        assert calls == ["DevOps Engineer", "Cloud Engineer", "SRE"]
+        assert [r.title for r in rows] == ["DevOps Engineer", "Cloud Engineer"]
+
     def test_linkedin_easy_apply_page_classified_for_auto_apply(self):
         sig = signals_from_html(load_fixture("linkedin_easy_apply.html"), "linkedin")
         assert classify_job(sig) == JobClassification.PLATFORM_EASY_APPLY
@@ -39,6 +53,19 @@ class TestLinkedInEasyApplyFilter:
 
 
 class TestNaukriEasyApplyMeansInternalOnly:
+    def test_search_wrapper_queries_every_keyword(self):
+        from platforms.naukri.platform import _search_each_keyword
+        calls = []
+
+        def search_one(keyword, _limit):
+            calls.append(keyword)
+            return [JobListing(keyword, "Acme", "India", f"https://x/{keyword}", "naukri")]
+
+        rows = _search_each_keyword(search_one, ["DevOps Engineer", "Cloud Engineer", "SRE"], 2)
+
+        assert calls == ["DevOps Engineer", "Cloud Engineer", "SRE"]
+        assert [r.title for r in rows] == ["DevOps Engineer", "Cloud Engineer"]
+
     def test_internal_apply_is_easy_apply(self):
         sig = signals_from_html(load_fixture("naukri_internal_apply.html"), "naukri")
         assert classify_job(sig) == JobClassification.PLATFORM_INTERNAL_APPLY

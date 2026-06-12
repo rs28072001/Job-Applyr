@@ -14,6 +14,11 @@ _GENERIC = frozenset({
     "urgent", "hiring", "opening", "required", "wanted", "needed",
 })
 
+_ROLE_GENERIC = frozenset({
+    "engineer", "engineering", "developer", "dev", "programmer", "consultant",
+    "specialist", "associate", "executive", "manager", "architect", "lead",
+})
+
 # Common equivalences so "QA Engineer" matches "Quality Assurance Engineer" etc.
 _SYNONYMS: dict[str, set[str]] = {
     "qa": {"quality", "tester", "testing", "test", "sdet"},
@@ -24,6 +29,7 @@ _SYNONYMS: dict[str, set[str]] = {
     "backend": {"back-end", "back"},
     "fullstack": {"full-stack", "full"},
     "devops": {"sre", "infrastructure"},
+    "sre": {"site", "reliability", "devops"},
     "analyst": {"analytics", "analysis"},
 }
 
@@ -65,6 +71,15 @@ def title_matches(job_title: str, keywords: list[str]) -> bool:
         return False
 
     for kw_tokens, _ in sig_keywords:
+        # Generic role words like engineer/developer are not enough to match.
+        # For "DevOps Engineer", "devops" must match; "Odoo Developer" must
+        # not pass just because developer ~= engineer.
+        domain_tokens = [t for t in kw_tokens if t not in _ROLE_GENERIC]
+        if domain_tokens:
+            if all(_token_matches(t, title_tokens) for t in domain_tokens):
+                return True
+            continue
+
         needed = (len(kw_tokens) + 1) // 2
         hits = sum(1 for t in kw_tokens if _token_matches(t, title_tokens))
         if hits >= needed:

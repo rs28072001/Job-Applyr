@@ -401,6 +401,19 @@ def _run_platform_db(
             continue
         seen_title_company.add(tc_key)
 
+        # Hard keyword targeting gate: unrelated platform/sponsored results
+        # never become Application rows and never enter Ignored Jobs.
+        if not title_matches(listing.title, keywords):
+            log_event(db, session_id, "title_mismatch_discarded", {
+                "platform": platform_name,
+                "job_title": listing.title,
+                "company": listing.company,
+                "job_url": listing.url,
+                "keywords": keywords,
+            })
+            tracker.job_already_applied(f"{listing.title} (title mismatch discarded)")
+            continue
+
         # Hard daily apply cap from PERSISTED rows (survives restarts).
         if daily_cap_reached(db, settings.max_jobs_per_day):
             tracker.rate_limit(f"Daily apply cap ({settings.max_jobs_per_day}) reached — stopping platform loop")
@@ -451,23 +464,6 @@ def _run_platform_db(
         ).first()
         if already:
             tracker.job_already_applied(listing.title)
-            continue
-
-        # Title targeting: skip unrelated listings BEFORE any fetch/LLM spend.
-        if not title_matches(listing.title, keywords):
-            app = Application(
-                session_id=session_id, platform=platform_name,
-                job_title=listing.title, company=listing.company,
-                job_url=listing.url, location=listing.location,
-                status=AppStatus.SKIPPED,
-                failure_reason=FailureReason.TITLE_MISMATCH,
-            )
-            db.add(app)
-            db.commit()
-            maybe_auto_ignore(db, app, enabled=getattr(settings, "auto_ignore_skipped", True))
-            tracker.apply_result("skipped", listing.title,
-                                 error=FailureReason.TITLE_MISMATCH)
-            refresh_session_counters(db, session_id)
             continue
 
         # Per-company dedupe: don't hit the same employer twice in a week.

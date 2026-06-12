@@ -108,6 +108,11 @@ def init_db() -> None:
                 "UPDATE applications SET failure_reason='low_score' WHERE failure_reason='below_threshold'"))
             conn.execute(text(
                 "UPDATE applications SET failure_reason='ai_skip' WHERE failure_reason='llm_recommended_skip'"))
+    if "ignored_jobs" in inspector.get_table_names():
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE ignored_jobs SET status='expired' WHERE ignore_reason='title_mismatch'"
+            ))
             # v4: external company-site jobs are auto-SAVED (no user action
             # requested). Lift previous external rows into the saved list.
             conn.execute(text(

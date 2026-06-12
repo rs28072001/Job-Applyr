@@ -24,6 +24,19 @@ def test_skipped_job_is_inserted_into_ignored_jobs(db):
     assert row.status == "active"
 
 
+def test_title_mismatch_is_not_inserted_into_ignored_jobs(db):
+    sess = Session(platform="naukri", mode="search", auto_ignore_skipped=True)
+    db.add(sess); db.commit()
+    app = Application(session_id=sess.id, platform="naukri", company="Oodles Technologies",
+                      job_title="Odoo Developer", job_url="https://naukri.com/job/1",
+                      status=AppStatus.QUEUED)
+    db.add(app); db.commit()
+
+    set_app_status(db, app, AppStatus.SKIPPED, failure_reason=FailureReason.TITLE_MISMATCH)
+
+    assert db.query(IgnoredJob).count() == 0
+
+
 def test_same_job_url_is_ignored_next_session(db):
     add_ignored_job(db, platform="naukri", company="A", title="DevOps Engineer",
                     url="https://naukri.com/job/123?src=x", reason="ai_skip")

@@ -29,6 +29,14 @@ class TestTitleMatches:
         assert title_matches("Automation QA Lead", kws)
         assert not title_matches("Graphic Designer", kws)
 
+    def test_generic_engineer_developer_is_not_enough(self):
+        kws = ["DevOps Engineer", "Cloud Engineer", "SRE"]
+        assert title_matches("Junior DevOps Engineer", kws)
+        assert title_matches("Cloud Infrastructure Engineer", kws)
+        assert title_matches("Site Reliability Engineer", kws)
+        assert not title_matches("Odoo Developer (DM - 4347)", kws)
+        assert not title_matches("Computer Vision Engineer", kws)
+
     def test_no_keywords_allows_everything(self):
         assert title_matches("Anything At All", [])
         assert title_matches("Anything At All", ["", "  "])
@@ -70,3 +78,44 @@ class TestPendingConfirmationStatus:
         refresh_session_counters(db, sess.id)
         db.refresh(sess)
         assert sess.applied == 2
+
+
+class TestHardPreQueueFilter:
+    def test_title_mismatch_is_discarded_before_application_row(self, db):
+        from types import SimpleNamespace
+        from api.models import Application, AuditEvent, IgnoredJob, Session as S
+        from api.session_manager import _run_platform_db
+        from platforms.base_platform import JobListing
+
+        sess = S(platform="naukri", mode="search_and_apply", status="running",
+                 keywords=["DevOps Engineer", "Cloud Engineer", "SRE"])
+        db.add(sess); db.commit()
+
+        class Platform:
+            driver = None
+            def ensure_logged_in(self): pass
+            def search_jobs(self, keywords, location, max_jobs):
+                return [JobListing(
+                    title="Odoo Developer (DM - 4347)",
+                    company="Oodles Technologies",
+                    location="Gurugram",
+                    url="https://naukri.com/odoo",
+                    platform="naukri",
+                )]
+
+        class RateLimiter:
+            def wait_between_jobs(self): pass
+
+        settings = SimpleNamespace(max_jobs_per_day=100, hide_previously_skipped=True,
+                                   auto_ignore_skipped=True)
+        _run_platform_db(
+            platform=Platform(), platform_name="naukri", cv_data=None, llm=None,
+            keywords=sess.keywords, location="Gurugram", job_target=5, threshold=70,
+            rate_limiter=RateLimiter(), session_id=sess.id, db=db,
+            stop_event=SimpleNamespace(is_set=lambda: False), applied_count=[0],
+            settings=settings,
+        )
+
+        assert db.query(Application).count() == 0
+        assert db.query(IgnoredJob).count() == 0
+        assert db.query(AuditEvent).filter_by(event_type="title_mismatch_discarded").count() == 1

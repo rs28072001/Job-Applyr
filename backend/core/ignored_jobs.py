@@ -13,7 +13,6 @@ from core.statuses import FailureReason
 
 
 STABLE_AUTO_IGNORE_REASONS = {
-    FailureReason.TITLE_MISMATCH,
     FailureReason.LLM_RECOMMENDED_SKIP,
     FailureReason.BELOW_THRESHOLD,
     FailureReason.DUPLICATE_COMPANY,
