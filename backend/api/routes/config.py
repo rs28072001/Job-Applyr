@@ -41,13 +41,26 @@ def get_config(db: DBSession = Depends(get_db), _: User = Depends(get_current_us
 @router.put("/api/config")
 def update_config(body: ConfigUpdate, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     cfg = db.get(Config, 1)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    print(f"BEFORE UPDATE - Config ID: {cfg.id}")
+    print(f"BEFORE - confidence_threshold: {cfg.confidence_threshold}, easy_apply_only: {cfg.easy_apply_only}, include_external_review: {cfg.include_external_review}")
+    print(f"BEFORE - hide_previously_skipped: {cfg.hide_previously_skipped}, auto_ignore_skipped: {cfg.auto_ignore_skipped}, date_posted_filter: {cfg.date_posted_filter}")
+    
+    update_data = body.model_dump(exclude_unset=True)
+    print(f"UPDATE DATA: {update_data}")
+    
+    for key, value in update_data.items():
         if key in SECRET_FIELDS and value == SECRET_MASK:
             continue
         if value is not None:
             setattr(cfg, key, value)
+    
     cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
+    db.refresh(cfg)
+    
+    print(f"AFTER UPDATE - confidence_threshold: {cfg.confidence_threshold}, easy_apply_only: {cfg.easy_apply_only}, include_external_review: {cfg.include_external_review}")
+    print(f"AFTER - hide_previously_skipped: {cfg.hide_previously_skipped}, auto_ignore_skipped: {cfg.auto_ignore_skipped}, date_posted_filter: {cfg.date_posted_filter}")
+    
     return {"status": "saved", "is_configured": is_llm_configured(cfg)}
 
 

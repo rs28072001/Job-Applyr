@@ -5,6 +5,8 @@ import DashboardPage from "./pages/DashboardPage";
 import ReviewQueuePage from "./pages/ReviewQueuePage";
 import HistoryPage from "./pages/HistoryPage";
 import IgnoredJobsPage from "./pages/IgnoredJobsPage";
+import JobPreferencesPage from "./pages/JobPreferencesPage";
+import ResumePage from "./pages/ResumePage";
 
 export default function App() {
   return (
@@ -16,6 +18,8 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="setup" element={<SetupPage />} />
+          <Route path="preferences" element={<JobPreferencesPage />} />
+          <Route path="resume" element={<ResumePage />} />
           <Route path="review" element={<ReviewQueuePage />} />
           <Route path="ignored" element={<IgnoredJobsPage />} />
           <Route path="history" element={<HistoryPage />} />
