@@ -40,6 +40,7 @@ class ConfigRead(BaseModel):
     hide_previously_skipped : bool = True
     auto_ignore_skipped     : bool = True
     date_posted_filter      : str = "any"
+    naukri_search_mode      : str = "selenium"  # selenium | api
     is_configured         : bool = False  # True when all required fields set
 
     class Config:
@@ -68,6 +69,10 @@ class ConfigUpdate(BaseModel):
     port_num              : Optional[int] = None
     max_jobs_per_hour     : Optional[int] = None
     max_jobs_per_day      : Optional[int] = None
+    platform              : Optional[str] = Field(None, pattern="^(naukri|linkedin|both)$")
+    mode                  : Optional[str] = Field(None, pattern="^(search|search_and_apply)$")
+    location              : Optional[str] = None
+    job_target            : Optional[int] = None
     easy_apply_only         : Optional[bool] = None
     include_external_review : Optional[bool] = None
     outreach_mode           : Optional[str] = Field(None, pattern="^(off|draft_only|send_after_approval)$")
@@ -79,6 +84,7 @@ class ConfigUpdate(BaseModel):
     hide_previously_skipped : Optional[bool] = None
     auto_ignore_skipped     : Optional[bool] = None
     date_posted_filter      : Optional[str] = Field(None, pattern="^(any|24h|3d|7d|14d)$")
+    naukri_search_mode      : Optional[str] = Field(None, pattern="^(selenium|api)$")
 
 
 class ConfigTestRequest(ConfigUpdate):

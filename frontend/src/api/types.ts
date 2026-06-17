@@ -34,12 +34,17 @@ export interface AppConfig {
   port_num: number;
   max_jobs_per_hour: number;
   max_jobs_per_day: number;
+  platform: "naukri" | "linkedin" | "both";
+  mode: "search" | "search_and_apply";
+  location: string;
+  job_target: number;
   easy_apply_only: boolean;
   include_external_review: boolean;
   outreach_mode: OutreachMode;
   hide_previously_skipped: boolean;
   auto_ignore_skipped: boolean;
   date_posted_filter: DatePostedFilter;
+  naukri_search_mode: "selenium" | "api";
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;

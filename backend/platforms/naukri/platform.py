@@ -1,5 +1,6 @@
 from ..base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult
 from . import login, search, job_scraper, apply
+from . import api_search
 
 
 class NaukriPlatform(BasePlatform):
@@ -12,6 +13,16 @@ class NaukriPlatform(BasePlatform):
         login.login(self.driver, self.config.naukri_userid, self.config.naukri_password)
 
     def search_jobs(self, keywords: list[str], location: str, max_jobs: int) -> list[JobListing]:
+        # Use API search mode if configured
+        if getattr(self.config, 'naukri_search_mode', 'selenium') == 'api':
+            return _search_each_keyword(
+                lambda kw, limit: api_search.search_jobs_api(
+                    [kw], location, limit, self.rate_limiter
+                ),
+                keywords,
+                max_jobs,
+            )
+        # Default to Selenium-based search
         return _search_each_keyword(
             lambda kw, limit: search.search_jobs(self.driver, [kw], location, limit, self.rate_limiter),
             keywords,

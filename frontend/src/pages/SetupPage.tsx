@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Upload, CheckCircle2, AlertCircle, Loader2, Play, ArrowRight, ArrowLeft,
-  User, Mail, Phone, Briefcase, Star, Key, Cpu, FileText, Sliders, ShieldCheck,
+  CheckCircle2, AlertCircle, Loader2, Play, ArrowLeft,
+  Key, Cpu, ShieldCheck, Mail,
 } from "lucide-react";
 // (Mail icon reused for the SMTP test button)
 import { api } from "../api/client";
-import type { AppConfig, CVProfile, OutreachMode, SessionStartRequest } from "../api/types";
+import type { AppConfig, OutreachMode, SessionStartRequest } from "../api/types";
 import { useSessionStore } from "../store/sessionStore";
 import { Card, LocalOnlyNote } from "../components/ui";
 
@@ -34,155 +34,24 @@ const AI_PROVIDER_OPTIONS = [
   { value: "openrouter", label: "OpenRouter", key: "openrouter_api_key", model: "openrouter_model", modelPlaceholder: "openai/gpt-oss-120b" },
 ] as const;
 
-function Toggle({ checked, onChange, label, hint, recommended }: {
-  checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; recommended?: boolean;
-}) {
-  return (
-    <button type="button" onClick={() => onChange(!checked)}
-      className="w-full flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-slate-300 bg-white text-left">
-      <span className={`mt-0.5 w-8 h-[18px] rounded-full relative transition-colors shrink-0
-        ${checked ? "bg-indigo-600" : "bg-slate-200"}`}>
-        <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all
-          ${checked ? "left-[18px]" : "left-[2px]"}`} />
-      </span>
-      <span className="min-w-0">
-        <span className="text-sm font-medium text-slate-800 flex items-center gap-2">
-          {label}
-          {recommended && <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-px rounded">Recommended</span>}
-        </span>
-        {hint && <span className="block text-xs text-slate-500 mt-0.5">{hint}</span>}
-      </span>
-    </button>
-  );
-}
-
-/* ── Step 1: Resume ───────────────────────────────────────────────────────── */
-
-function CVUploadZone({ onParsed }: { onParsed: (p: CVProfile) => void }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-
-  async function process(file: File) {
-    if (!file.type.includes("pdf")) { setError("Please upload a PDF file"); return; }
-    setError(""); setUploading(true);
-    const fd = new FormData();
-    fd.append("cv_file", file);
-    try {
-      const r = await api.post<CVProfile>("/api/cv/parse", fd, {
-        headers: { "Content-Type": "multipart/form-data" }, timeout: 120_000,
-      });
-      onParsed(r.data);
-    } catch (e: any) {
-      setError(e.response?.data?.detail ?? "CV parsing failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div>
-      <label
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) process(f); }}
-        className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg
-          py-8 px-6 cursor-pointer transition-colors ${
-          uploading ? "border-indigo-300 bg-indigo-50/50" :
-          dragOver  ? "border-indigo-400 bg-indigo-50/50" :
-                      "border-slate-200 bg-slate-50 hover:border-indigo-300"
-        }`}
-      >
-        {uploading ? (
-          <>
-            <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-            <p className="text-sm font-medium text-indigo-700">Parsing resume with AI…</p>
-            <p className="text-xs text-indigo-400">Usually 15–30 seconds</p>
-          </>
-        ) : (
-          <>
-            <Upload className="w-5 h-5 text-slate-400" />
-            <p className="text-sm font-medium text-slate-700">
-              Drop your resume here, or <span className="text-indigo-600">browse</span>
-            </p>
-            <p className="text-xs text-slate-400">PDF only · parsed locally via your configured AI provider</p>
-          </>
-        )}
-        <input type="file" accept=".pdf" className="hidden" disabled={uploading}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) process(f); }} />
-      </label>
-      {error && (
-        <p className="flex items-center gap-1.5 mt-2 text-xs text-red-600">
-          <AlertCircle className="w-3.5 h-3.5" />{error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ParsedResumePreview({ profile }: { profile: CVProfile }) {
-  return (
-    <div className="mt-4 border border-emerald-200 bg-emerald-50/60 rounded-lg p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-        <span className="text-sm font-semibold text-emerald-800">Resume parsed</span>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-        {[
-          { icon: User, val: profile.name },
-          { icon: Mail, val: profile.email },
-          { icon: Phone, val: profile.phone },
-          { icon: Star, val: profile.experience_years ? `${profile.experience_years} years experience` : "" },
-          { icon: Briefcase, val: profile.job_titles.slice(0, 2).join(", ") },
-        ].filter((i) => i.val).map(({ icon: Icon, val }) => (
-          <div key={val} className="flex items-center gap-1.5 text-slate-600 min-w-0">
-            <Icon className="w-3 h-3 text-slate-400 shrink-0" />
-            <span className="truncate">{val}</span>
-          </div>
-        ))}
-      </div>
-      {profile.skills.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {profile.skills.slice(0, 10).map((s) => (
-            <span key={s} className="px-1.5 py-0.5 bg-white border border-emerald-200 text-emerald-700 text-[11px] rounded">{s}</span>
-          ))}
-          {profile.skills.length > 10 && (
-            <span className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-500 text-[11px] rounded">
-              +{profile.skills.length - 10} more
-            </span>
-          )}
-        </div>
-      )}
-      {profile.summary && <p className="text-xs text-slate-500 line-clamp-2">{profile.summary}</p>}
-    </div>
-  );
-}
-
 /* ── Stepper ─────────────────────────────────────────────────────────────── */
 
 const STEPS = [
-  { n: 1, label: "Resume", icon: FileText },
-  { n: 2, label: "Job preferences", icon: Sliders },
-  { n: 3, label: "Credentials & launch", icon: ShieldCheck },
+  { n: 1, label: "Credentials & launch", icon: ShieldCheck },
 ];
 
-function Stepper({ step, goto, maxReached }: { step: number; goto: (n: number) => void; maxReached: number }) {
+function Stepper({ step }: { step: number }) {
   return (
     <div className="flex items-center gap-2">
-      {STEPS.map(({ n, label, icon: Icon }, i) => {
+      {STEPS.map(({ n, label, icon: Icon }) => {
         const active = step === n;
-        const done = n < step;
-        const reachable = n <= maxReached;
         return (
           <div key={n} className="flex items-center gap-2">
-            {i > 0 && <div className={`w-8 h-px ${done || active ? "bg-indigo-300" : "bg-slate-200"}`} />}
-            <button type="button" disabled={!reachable} onClick={() => reachable && goto(n)}
+            <button type="button" disabled
               className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors
                 ${active ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                : done ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-slate-200 bg-white text-slate-400"}
-                ${reachable && !active ? "hover:border-slate-300" : ""}`}>
-              {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
+                : "border-slate-200 bg-white text-slate-400"}`}>
+              <Icon className="w-3.5 h-3.5" />
               <span>{n}. {label}</span>
             </button>
           </div>
@@ -196,12 +65,12 @@ function Stepper({ step, goto, maxReached }: { step: number; goto: (n: number) =
 
 export default function SetupPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const reset = useSessionStore((s) => s.reset);
   const setRunning = useSessionStore((s) => s.setRunning);
 
-  const [step, setStep] = useState(1);
-  const [maxReached, setMaxReached] = useState(1);
-  const [profile, setProfile] = useState<CVProfile | null>(null);
+  const initialStep = searchParams.get("step") ? parseInt(searchParams.get("step")!) : 1;
+  const [step, setStep] = useState(initialStep);
   const [startErr, setStartErr] = useState("");
   const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -209,7 +78,6 @@ export default function SetupPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
-  const [keywordsText, setKeywordsText] = useState("");
   const [prefs, setPrefs] = useState<Omit<SessionStartRequest, "keywords">>({
     platform: "naukri",
     mode: "search_and_apply",
@@ -243,10 +111,6 @@ export default function SetupPage() {
   const [smtpTesting, setSmtpTesting] = useState(false);
 
   useEffect(() => {
-    api.get<CVProfile>("/api/cv/profile").then((r) => {
-      setProfile(r.data);
-      setKeywordsText((t) => t || (r.data.job_titles ?? []).slice(0, 3).join(", "));
-    }).catch(() => {});
     api.get<AppConfig>("/api/config").then((r) => {
       const d = r.data;
       const provider = String(d.ai_provider || "groq");
@@ -281,12 +145,6 @@ export default function SetupPage() {
       }));
     }).catch(() => {});
   }, []);
-
-  function next() {
-    const n = Math.min(step + 1, 3);
-    setStep(n);
-    setMaxReached((m) => Math.max(m, n));
-  }
 
   function buildConfigPayload(): Record<string, unknown> {
     const payload: Record<string, unknown> = {
@@ -338,9 +196,7 @@ export default function SetupPage() {
     setStartErr(""); setStarting(true);
     try {
       await api.put("/api/config", buildConfigPayload());
-      const keywords = keywordsText.split(",").map((k) => k.trim()).filter(Boolean);
-      const finalKeywords = keywords.length ? keywords : (profile?.job_titles ?? ["Software Engineer"]);
-      const r = await api.post<{ session_id: number }>("/api/session/start", { ...prefs, keywords: finalKeywords });
+      const r = await api.post<{ session_id: number }>("/api/session/start", { ...prefs, keywords: ["Software Engineer"] });
       reset();
       setRunning(true, r.data.session_id);
       navigate("/dashboard");
@@ -377,163 +233,14 @@ export default function SetupPage() {
     <div className="p-6 max-w-3xl mx-auto">
       <div className="mb-5">
         <h1 className="text-xl font-bold text-slate-900">Setup</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Three steps: resume → preferences → credentials &amp; launch</p>
+        <p className="text-slate-500 text-sm mt-0.5">Configure credentials &amp; launch</p>
       </div>
 
-      <div className="mb-5"><Stepper step={step} goto={setStep} maxReached={maxReached} /></div>
+      <div className="mb-5"><Stepper step={step} /></div>
 
-      {/* ── Step 1: Resume ── */}
+      {/* ── Step 1: AI provider, outreach, launch ── */}
       {step === 1 && (
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-slate-800 mb-1">Upload your resume</h2>
-          <p className="text-xs text-slate-500 mb-4">AI extracts your skills, titles and experience to score jobs against. Stored locally only.</p>
-          <CVUploadZone onParsed={setProfile} />
-          {profile && <ParsedResumePreview profile={profile} />}
-          <div className="flex items-center justify-between mt-5">
-            <LocalOnlyNote text="Your resume stays on this machine — it is only sent to your own AI provider for parsing." />
-            <button onClick={next}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg">
-              {profile ? "Continue" : "Skip for now"} <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* ── Step 2: Job preferences ── */}
-      {step === 2 && (
-        <Card className="p-5 space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800 mb-1">Job preferences</h2>
-            <p className="text-xs text-slate-500">Where to search and how cautious to be.</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Platform</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["naukri", "linkedin", "both"] as const).map((p) => (
-                  <button key={p} type="button" onClick={() => setPrefs({ ...prefs, platform: p })}
-                    className={`py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors
-                      ${prefs.platform === p ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label>Mode</Label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {[{ v: "search_and_apply", l: "Search & Apply" }, { v: "search", l: "Search only" }].map(({ v, l }) => (
-                  <button key={v} type="button" onClick={() => setPrefs({ ...prefs, mode: v as any })}
-                    className={`py-1.5 rounded-lg border text-xs font-medium transition-colors
-                      ${prefs.mode === v ? "bg-indigo-600 text-white border-indigo-600" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="col-span-2">
-              <Label>Target job titles / keywords</Label>
-              <input value={keywordsText} onChange={(e) => setKeywordsText(e.target.value)}
-                placeholder="QA Engineer, SDET, Automation Engineer" className={inputCls} />
-              <p className="mt-1 text-[11px] text-slate-400">
-                Comma-separated. Only these are searched; unrelated titles are skipped as "title mismatch" before scoring.
-              </p>
-            </div>
-            <div>
-              <Label>Location</Label>
-              <input value={prefs.location} onChange={(e) => setPrefs({ ...prefs, location: e.target.value })}
-                placeholder="gurugram" className={inputCls} />
-            </div>
-            <div>
-              <Label>Date posted</Label>
-              <select value={prefs.date_posted_filter}
-                onChange={(e) => setPrefs({ ...prefs, date_posted_filter: e.target.value as any })}
-                className={inputCls}>
-                <option value="any">Any time</option>
-                <option value="24h">Past 24 hours</option>
-                <option value="3d">Past 3 days</option>
-                <option value="7d">Past 7 days</option>
-                <option value="14d">Past 14 days</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3 col-span-2">
-              <div>
-                <Label>Target jobs</Label>
-                <input type="number" min={1} max={100} value={prefs.job_target}
-                  onChange={(e) => setPrefs({ ...prefs, job_target: +e.target.value })} className={inputCls} />
-              </div>
-              <div>
-                <Label>Min score</Label>
-                <input type="number" min={0} max={100} value={prefs.confidence_threshold}
-                  onChange={(e) => setPrefs({ ...prefs, confidence_threshold: +e.target.value })} className={inputCls} />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-1">
-            <Toggle checked={prefs.easy_apply_only} recommended
-              onChange={(v) => setPrefs({ ...prefs, easy_apply_only: v })}
-              label="Easy Apply only"
-              hint="LinkedIn: platform Easy Apply filter. Naukri: internal apply / chatbot flows only. External company sites are never auto-driven." />
-            <Toggle checked={prefs.include_external_review} recommended
-              onChange={(v) => setPrefs({ ...prefs, include_external_review: v })}
-              label="Save external company-site jobs automatically"
-              hint="Jobs that apply on a company website are saved with their link — no action needed, the session keeps moving. Turn off to skip them instead." />
-            <Toggle checked={prefs.hide_previously_skipped} recommended
-              onChange={(v) => setPrefs({ ...prefs, hide_previously_skipped: v })}
-              label="Hide jobs skipped before"
-              hint="Repeated jobs from the ignored sheet are skipped before details, scoring, or applying, so they do not keep filling the dashboard." />
-            <Toggle checked={prefs.auto_ignore_skipped} recommended
-              onChange={(v) => setPrefs({ ...prefs, auto_ignore_skipped: v })}
-              label="Add skipped jobs to ignore sheet"
-              hint="Stable skips like title mismatch, AI skip, low score, duplicate company, unsupported flow, or external site are remembered locally." />
-          </div>
-
-          <div className="flex items-center justify-between pt-1">
-            <button onClick={() => setStep(1)}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-600 text-sm font-medium rounded-lg">
-              <ArrowLeft className="w-3.5 h-3.5" /> Back
-            </button>
-            <button onClick={next}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg">
-              Continue <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* ── Step 3: Credentials, AI provider, outreach, launch ── */}
-      {step === 3 && (
         <div className="space-y-4">
-          <Card className="p-5 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-800 mb-1">Platform credentials</h2>
-                <p className="text-xs text-slate-500">Used only by your local browser session to log in.</p>
-              </div>
-              <LocalOnlyNote />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: "Naukri Email", k: "naukri_email", type: "email" },
-                { label: "Naukri Password", k: "naukri_password", type: "password" },
-                { label: "LinkedIn Email", k: "linkedin_email", type: "email" },
-                { label: "LinkedIn Password", k: "linkedin_password", type: "password" },
-              ].map(({ label, k, type }) => (
-                <div key={k}>
-                  <Label>{label}</Label>
-                  <input type={type} value={(cfg as any)[k]} placeholder={type === "password" ? "••••••••" : ""}
-                    onFocus={() => { if (type === "password" && (cfg as any)[k] === SECRET_MASK) setCfg({ ...cfg, [k]: "" }); }}
-                    onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })} className={inputCls} />
-                  {type === "password" && (cfg as any)[k] === SECRET_MASK && (
-                    <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new password only to replace it.</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-
           <Card className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -666,7 +373,7 @@ export default function SetupPage() {
           )}
 
           <div className="flex items-center justify-between">
-            <button onClick={() => setStep(2)}
+            <button onClick={() => setStep(1)}
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-600 text-sm font-medium rounded-lg">
               <ArrowLeft className="w-3.5 h-3.5" /> Back
             </button>

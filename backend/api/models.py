@@ -50,6 +50,11 @@ class Config(Base):
     port_num              = Column(Integer, default=9222)
     max_jobs_per_hour     = Column(Integer, default=30)
     max_jobs_per_day      = Column(Integer, default=150)
+    # Job preferences
+    platform              = Column(String,  default="naukri")  # naukri | linkedin | both
+    mode                  = Column(String,  default="search_and_apply")  # search | search_and_apply
+    location              = Column(String,  default="gurugram")
+    job_target            = Column(Integer, default=5)
     # Safer-automation defaults
     easy_apply_only         = Column(Boolean, default=True)   # platform-native flows only
     include_external_review = Column(Boolean, default=True)   # external jobs → review queue
@@ -58,11 +63,12 @@ class Config(Base):
     smtp_host             = Column(String, default="")
     smtp_port             = Column(Integer, default=587)
     smtp_username         = Column(String, default="")
-    smtp_password         = Column(String, default="")
-    smtp_from             = Column(String, default="")
+    smtp_password         = Column(String,  default="")
+    smtp_from             = Column(String,  default="")
     hide_previously_skipped = Column(Boolean, default=True)
     auto_ignore_skipped     = Column(Boolean, default=True)
     date_posted_filter      = Column(String,  default="any")
+    naukri_search_mode      = Column(String,  default="selenium")  # selenium | api
     updated_at            = Column(DateTime, default=_now, onupdate=_now)
 
 

@@ -37,6 +37,7 @@ class Config:
     job_target: int
     location: str
     platform_choice: str
+    naukri_search_mode: str = "selenium"   # selenium | api
     # Safer-automation controls
     easy_apply_only: bool = True            # platform-native apply flows only
     include_external_review: bool = True    # external jobs → manual review queue
@@ -101,4 +102,5 @@ def load_config() -> Config:
         job_target=optional_int("JOB_TARGET", 10),
         location=os.getenv("LOCATION", "India").strip(),
         platform_choice=os.getenv("PLATFORM_CHOICE", "naukri").strip(),
+        naukri_search_mode=os.getenv("NAUKRI_SEARCH_MODE", "selenium").strip(),
     )

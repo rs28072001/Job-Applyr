@@ -54,3 +54,5 @@ backend/data/evidence/
 *.temp
 .cache/
 .claude
+naukari_backend_list_url copy.txt
+naukari_backend_search copy.txt
