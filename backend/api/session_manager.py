@@ -178,6 +178,8 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
                                        getattr(db_sess, "auto_ignore_skipped", True)))
         date_posted_filter      = kwargs.get("date_posted_filter",
                                        getattr(db_sess, "date_posted_filter", None)) or "any"
+        naukri_search_mode      = kwargs.get("naukri_search_mode",
+                                       getattr(db_cfg, "naukri_search_mode", "selenium")) or "selenium"
 
         cfg = Config(
             naukri_userid       = db_cfg.naukri_email,
@@ -213,6 +215,7 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             hide_previously_skipped = hide_previously_skipped,
             auto_ignore_skipped = auto_ignore_skipped,
             date_posted_filter  = date_posted_filter,
+            naukri_search_mode  = naukri_search_mode,
         )
 
         if db_cv:
@@ -255,27 +258,44 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
         if cv_data.raw_text:
             tracker.cv_parsed(cv_data)
 
-        logger.info("Session %s: Connecting to Chrome", session_id)
-        global _driver
-        try:
-            driver = ensure_chrome_running(cfg.port_num, cfg.chrome_user_data_dir)
+        # Skip Chrome if API mode + search only (no browser needed)
+        mode = kwargs.get("mode", db_sess.mode)
+        use_chrome = not (
+            cfg.platform_choice == "naukri" and
+            cfg.naukri_search_mode == "api" and
+            mode == "search"
+        )
+
+        driver = None
+        if use_chrome:
+            logger.info("Session %s: Connecting to Chrome", session_id)
+            global _driver
+            try:
+                driver = ensure_chrome_running(cfg.port_num, cfg.chrome_user_data_dir)
+                with _lock:
+                    _driver = driver
+                logger.info("Session %s: Chrome connected successfully", session_id)
+            except (ChromeNotFoundError, ChromeAttachError) as e:
+                logger.error("Session %s: Chrome connection failed: %s", session_id, e)
+                tracker.get().error("[CHROME] Failed to connect: %s", e)
+                tracker._emit({"type": "error", "msg": f"Chrome error: {e}"})
+                finalize_session(db, session_id, stopped=False, failed=True)
+                return
+        else:
+            logger.info("Session %s: Skipping Chrome (API mode + search only)", session_id)
             with _lock:
-                _driver = driver
-            logger.info("Session %s: Chrome connected successfully", session_id)
-        except (ChromeNotFoundError, ChromeAttachError) as e:
-            logger.error("Session %s: Chrome connection failed: %s", session_id, e)
-            tracker.get().error("[CHROME] Failed to connect: %s", e)
-            tracker._emit({"type": "error", "msg": f"Chrome error: {e}"})
-            finalize_session(db, session_id, stopped=False, failed=True)
-            return
+                _driver = None
 
         rate_limiter = RateLimiter(max_per_hour=cfg.max_jobs_per_hour,
                                    max_per_day=cfg.max_jobs_per_day)
 
         platforms_to_run = []
+        # Only run platforms that have a driver or support API mode
         if cfg.platform_choice in ("naukri", "both"):
+            # Naukri can work without driver in API mode
             platforms_to_run.append(("naukri",   NaukriPlatform(driver, cfg, rate_limiter)))
-        if cfg.platform_choice in ("linkedin", "both"):
+        if cfg.platform_choice in ("linkedin", "both") and driver:
+            # LinkedIn requires driver (no API mode yet)
             platforms_to_run.append(("linkedin", LinkedInPlatform(driver, cfg, rate_limiter)))
 
         logger.info("Session %s: Initializing LLM client", session_id)

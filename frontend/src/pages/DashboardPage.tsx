@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Square, ExternalLink, CheckCircle2, XCircle, AlertCircle, AlertTriangle,
-  Inbox, Activity, ListChecks, Mail, Loader2, Search, OctagonX, Download,
+  Inbox, Activity, ListChecks, Mail, Loader2, Search, OctagonX, Download, Play,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useSessionStore, type JobEntry } from "../store/sessionStore";
 import type {
-  ApplicationRecord, PaginatedApplications, ReviewQueueResponse, SessionStatusResponse,
+  ApplicationRecord, PaginatedApplications, ReviewQueueResponse, SessionStatusResponse, AppConfig,
 } from "../api/types";
 import {
   Card, CardHeader, ClassificationBadge, EmptyState, ScorePill, StatusBadge, failureLabel,
@@ -224,11 +224,13 @@ export default function DashboardPage() {
   const loginStatus = useSessionStore((s) => s.loginStatus);
 
   const [stopping, setStopping] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobEntry | null>(null);
   const [queue, setQueue] = useState<ReviewQueueResponse | null>(null);
   const [persistedJobs, setPersistedJobs] = useState<JobEntry[]>([]);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [reportSessionId, setReportSessionId] = useState<number | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Poll persisted status/counters — counters always reflect DB rows.
   useEffect(() => {
@@ -274,6 +276,51 @@ export default function DashboardPage() {
     }
   }
 
+  async function startSession() {
+    setStarting(true);
+    setStartError(null);
+    try {
+      // Load current config to get user preferences
+      const configRes = await api.get<AppConfig>("/api/config");
+      const cfg = configRes.data;
+
+      // Get keywords from CV profile if not set
+      let keywords: string[] = [];
+      try {
+        const cvRes = await api.get("/api/cv/profile");
+        const cv = cvRes.data;
+        keywords = cv.job_titles || [];
+      } catch {
+        keywords = ["Software Engineer"];
+      }
+
+      const payload = {
+        platform: cfg.platform || "naukri",
+        mode: cfg.mode || "search_and_apply",
+        location: cfg.location || "gurugram",
+        job_target: cfg.job_target || 5,
+        confidence_threshold: cfg.confidence_threshold || 75,
+        keywords: keywords,
+        easy_apply_only: cfg.easy_apply_only ?? true,
+        include_external_review: cfg.include_external_review ?? true,
+        outreach_mode: cfg.outreach_mode || "draft_only",
+        hide_previously_skipped: cfg.hide_previously_skipped ?? true,
+        auto_ignore_skipped: cfg.auto_ignore_skipped ?? true,
+        date_posted_filter: cfg.date_posted_filter || "any",
+        naukri_search_mode: cfg.naukri_search_mode || "selenium",
+      };
+
+      const response = await api.post("/api/session/start", payload);
+      setRunning(true, response.data.session_id);
+    } catch (e: any) {
+      console.error("Failed to start session:", e);
+      const detail = e.response?.data?.detail;
+      setStartError(typeof detail === 'string' ? detail : detail?.message || e.message || "Failed to start session");
+    } finally {
+      setStarting(false);
+    }
+  }
+
   // Live WS rows take priority; fall back to persisted rows after refresh.
   const tableJobs = jobs.length > 0 ? jobs : persistedJobs;
 
@@ -315,15 +362,25 @@ export default function DashboardPage() {
               {stopping ? "Stopping…" : "Stop session"}
             </button>
           ) : (
-            <Link to="/setup"
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg">
-              New session
-            </Link>
+            <button onClick={startSession} disabled={starting}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60
+                         text-white text-xs font-semibold rounded-lg">
+              {starting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3 h-3" />}
+              {starting ? "Starting…" : "Run"}
+            </button>
           )}
         </div>
       </div>
 
       {/* System alerts: broken selectors, missing SMTP, high failure rate */}
+      {startError && (
+        <AlertBanner alert={{
+          id: "start-error",
+          severity: "error",
+          title: "Failed to start session",
+          detail: startError,
+        }} />
+      )}
       {alerts.length > 0 && (
         <div className="space-y-2">
           {alerts.map((a) => <AlertBanner key={a.id} alert={a} />)}
