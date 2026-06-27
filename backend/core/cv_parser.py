@@ -92,6 +92,90 @@ Rules:
         raise CVParseError(f"LLM returned invalid JSON for CV fields: {e}\nResponse: {text}")
 
 
+# ── No-AI (fuzzy) extraction ──────────────────────────────────────────────────
+
+# Common tech/QA skills lexicon for keyword-based extraction (no LLM).
+_SKILL_LEXICON = [
+    "manual testing", "automation testing", "selenium", "selenium webdriver", "appium",
+    "cypress", "playwright", "testng", "junit", "pytest", "cucumber", "bdd", "tdd",
+    "api testing", "rest assured", "postman", "soapui", "jmeter", "load testing",
+    "performance testing", "regression testing", "smoke testing", "sanity testing",
+    "functional testing", "integration testing", "uat", "test cases", "test planning",
+    "test execution", "defect tracking", "jira", "bugzilla", "qtest", "azure devops",
+    "ci/cd", "jenkins", "git", "github", "gitlab", "docker", "kubernetes",
+    "python", "java", "javascript", "typescript", "c#", "sql", "mysql", "postgresql",
+    "mongodb", "rest api", "graphql", "agile", "scrum", "kanban", "aws", "azure", "gcp",
+    "linux", "html", "css", "react", "angular", "node.js", "spring", "django",
+    "data testing", "database testing", "mobile testing", "web testing",
+]
+
+_TITLE_PATTERNS = [
+    r"\b(?:senior |sr\.? |lead |junior |jr\.? )?(?:qa|sdet|software|automation|test|quality)\s+"
+    r"(?:engineer|analyst|tester|lead|architect|developer|assurance)\b",
+    r"\bquality assurance\b",
+    r"\bsoftware (?:development engineer in test|developer|engineer)\b",
+]
+
+
+def _extract_skills_fuzzy(raw_text: str) -> list[str]:
+    text = raw_text.lower()
+    found = []
+    for skill in _SKILL_LEXICON:
+        if skill in text and skill not in found:
+            found.append(skill.title())
+    return found[:20]
+
+
+def _extract_titles_fuzzy(raw_text: str) -> list[str]:
+    text = raw_text.lower()
+    titles, seen = [], set()
+    for pat in _TITLE_PATTERNS:
+        for m in re.finditer(pat, text):
+            t = " ".join(w.capitalize() for w in m.group(0).split())
+            if t.lower() not in seen:
+                seen.add(t.lower())
+                titles.append(t)
+    return titles[:4] or ["QA Engineer"]
+
+
+def _extract_experience_fuzzy(raw_text: str) -> float:
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)", raw_text.lower())
+    vals = [float(m) for m in matches if float(m) <= 50]
+    return max(vals) if vals else 0.0
+
+
+def _extract_name_fuzzy(raw_text: str) -> str:
+    # First non-empty line that looks like a name (1-4 capitalized words, no digits/@).
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line or "@" in line or any(ch.isdigit() for ch in line):
+            continue
+        words = line.split()
+        if 1 <= len(words) <= 4 and all(w[:1].isupper() for w in words if w):
+            return line
+    return ""
+
+
+def parse_cv_fuzzy(pdf_path: str) -> CVData:
+    """Parse a CV without any LLM — regex/keyword heuristics only."""
+    path = Path(pdf_path)
+    if not path.exists():
+        raise CVParseError(f"CV file not found: {pdf_path}")
+
+    raw_text = _extract_raw_text(pdf_path)
+    return CVData(
+        raw_text=raw_text,
+        name=_extract_name_fuzzy(raw_text),
+        email=_extract_email(raw_text),
+        phone=_extract_phone(raw_text),
+        skills=_extract_skills_fuzzy(raw_text),
+        experience_years=_extract_experience_fuzzy(raw_text),
+        job_titles=_extract_titles_fuzzy(raw_text),
+        education=[],
+        summary="",
+    )
+
+
 def parse_cv(
     pdf_path: str,
     azure_endpoint: str,

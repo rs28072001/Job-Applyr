@@ -20,7 +20,7 @@ export interface AppConfig {
   azure_openai_endpoint: string;
   azure_openai_api_key: string;  // "***" when set
   azure_deployment_name: string;
-  ai_provider: "azure" | "openai" | "gemini" | "groq" | "openrouter";
+  ai_provider: "azure" | "openai" | "gemini" | "groq" | "openrouter" | "fuzzy";
   openai_api_key: string;        // "***" when set
   openai_model: string;
   gemini_api_key: string;        // "***" when set
@@ -45,6 +45,8 @@ export interface AppConfig {
   auto_ignore_skipped: boolean;
   date_posted_filter: DatePostedFilter;
   naukri_search_mode: "selenium" | "api";
+  naukri_cookie: string;          // "***" when set
+  naukri_nkparam: string;         // "***" when set
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
@@ -134,6 +136,11 @@ export interface ApplicationRecord {
   recommendation: string;
   rationale: string;
   job_description: string;
+  company_logo_url: string;
+  posted_date: string;
+  about_company: string;
+  applicants_count: string;
+  openings: string;
   error_message: string | null;
   timestamp: string;
   updated_at: string | null;

@@ -14,10 +14,13 @@ const NAV = [
   { to: "/history", label: "History", icon: History },
 ];
 
-function Avatar({ name, email }: { name: string; email: string }) {
+function Avatar({ name, email, avatar }: { name: string; email: string; avatar?: string | null }) {
   const initials = name
     ? name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
     : email.slice(0, 2).toUpperCase() || "LU";
+  if (avatar) {
+    return <img src={avatar} alt={name || "Profile"} className="w-7 h-7 rounded-full object-cover shrink-0" />;
+  }
   return (
     <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center
                     text-white text-[10px] font-bold shrink-0">
@@ -29,6 +32,7 @@ function Avatar({ name, email }: { name: string; email: string }) {
 export default function AppShell() {
   const email = useAuthStore((s) => s.email) ?? "";
   const fullName = useAuthStore((s) => s.fullName) ?? "";
+  const avatar = useAuthStore((s) => s.avatar);
   const isRunning = useSessionStore((s) => s.isRunning);
 
   return (
@@ -73,13 +77,18 @@ export default function AppShell() {
 
         <div className="border-t border-slate-100 p-2.5 space-y-2">
           <ThemeToggle />
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <Avatar name={fullName} email={email} />
+          <NavLink to="/profile"
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors ${
+                isActive ? "bg-indigo-50 border border-indigo-100" : "hover:bg-slate-50 border border-transparent"
+              }`
+            }>
+            <Avatar name={fullName} email={email} avatar={avatar} />
             <div className="flex-1 min-w-0">
               <p className="text-slate-700 text-xs font-medium truncate">{fullName || "Local User"}</p>
-              <p className="text-slate-400 text-[11px] truncate">{email || "Runs entirely on this machine"}</p>
+              <p className="text-slate-400 text-[11px] truncate">{email || "View profile"}</p>
             </div>
-          </div>
+          </NavLink>
         </div>
       </aside>
 

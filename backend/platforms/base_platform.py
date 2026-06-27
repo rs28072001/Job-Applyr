@@ -14,6 +14,7 @@ class JobListing:
     url: str
     platform: str
     raw_snippet: str = ""
+    raw_data: dict = field(default_factory=dict)  # full platform record (API mode)
 
 
 @dataclass

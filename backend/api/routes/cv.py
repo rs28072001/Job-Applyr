@@ -36,9 +36,30 @@ async def parse_cv_endpoint(cv_file: UploadFile = File(...), db: DBSession = Dep
     from api.models import Config as ConfigModel
     from core.llm_provider import get_llm_settings, is_llm_configured, validate_llm_settings, LLMConfigError
     cfg = db.get(ConfigModel, 1)
+    llm_settings = get_llm_settings(cfg) if cfg else None
+
+    # Fuzzy (no-AI) mode: extract with regex/keyword heuristics, no credentials.
+    if llm_settings and llm_settings.provider == "fuzzy":
+        try:
+            from core.cv_parser import parse_cv_fuzzy
+            cv_data = parse_cv_fuzzy(str(dest))
+        except Exception as e:
+            raise HTTPException(422, f"CV parse failed: {str(e) or type(e).__name__}")
+        db.query(CVProfile).update({"is_active": False})
+        profile = CVProfile(
+            name=cv_data.name, email=cv_data.email, phone=cv_data.phone,
+            raw_text=cv_data.raw_text, skills=cv_data.skills,
+            job_titles=cv_data.job_titles, experience_years=cv_data.experience_years,
+            education=cv_data.education, summary=cv_data.summary,
+            pdf_path=str(dest), is_active=True,
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+        return profile
+
     if not cfg or not is_llm_configured(cfg):
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
-    llm_settings = get_llm_settings(cfg)
     try:
         validate_llm_settings(llm_settings)
     except LLMConfigError as e:
@@ -112,9 +133,11 @@ def analyze_ats(db: DBSession = Depends(get_db), _: User = Depends(get_current_u
     from openai import OpenAI
 
     cfg = db.get(ConfigModel, 1)
+    llm_settings = get_llm_settings(cfg) if cfg else None
+    if llm_settings and llm_settings.provider == "fuzzy":
+        raise HTTPException(400, "Know Your ATS needs an AI provider. Select one in Settings (fuzzy/no-AI mode can't analyze resumes).")
     if not cfg or not is_llm_configured(cfg):
         raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
-    llm_settings = get_llm_settings(cfg)
     try:
         validate_llm_settings(llm_settings)
     except LLMConfigError as e:

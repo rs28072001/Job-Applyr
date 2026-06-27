@@ -14,6 +14,8 @@ router = APIRouter()
 SECRET_MASK = "***"
 SECRET_FIELDS = (
     "naukri_password",
+    "naukri_cookie",
+    "naukri_nkparam",
     "linkedin_password",
     "azure_openai_api_key",
     "openai_api_key",

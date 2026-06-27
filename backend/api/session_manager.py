@@ -180,6 +180,8 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
                                        getattr(db_sess, "date_posted_filter", None)) or "any"
         naukri_search_mode      = kwargs.get("naukri_search_mode",
                                        getattr(db_cfg, "naukri_search_mode", "selenium")) or "selenium"
+        naukri_cookie           = getattr(db_cfg, "naukri_cookie", "") or ""
+        naukri_nkparam          = getattr(db_cfg, "naukri_nkparam", "") or ""
 
         cfg = Config(
             naukri_userid       = db_cfg.naukri_email,
@@ -216,6 +218,8 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             auto_ignore_skipped = auto_ignore_skipped,
             date_posted_filter  = date_posted_filter,
             naukri_search_mode  = naukri_search_mode,
+            naukri_cookie       = naukri_cookie,
+            naukri_nkparam      = naukri_nkparam,
         )
 
         if db_cv:
@@ -298,12 +302,17 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
             # LinkedIn requires driver (no API mode yet)
             platforms_to_run.append(("linkedin", LinkedInPlatform(driver, cfg, rate_limiter)))
 
-        logger.info("Session %s: Initializing LLM client", session_id)
         llm_settings = get_llm_settings(cfg)
-        validate_llm_settings(llm_settings)
-        llm = LLMClient(llm_settings.base_url, llm_settings.api_key,
-                        cv_data, llm_settings.model)
-        logger.info("Session %s: LLM client initialized", session_id)
+        if llm_settings.provider == "fuzzy":
+            from core.fuzzy_client import FuzzyClient
+            logger.info("Session %s: Using fuzzy (no-AI) matcher", session_id)
+            llm = FuzzyClient(cv_data)
+        else:
+            logger.info("Session %s: Initializing LLM client", session_id)
+            validate_llm_settings(llm_settings)
+            llm = LLMClient(llm_settings.base_url, llm_settings.api_key,
+                            cv_data, llm_settings.model)
+            logger.info("Session %s: LLM client initialized", session_id)
 
         applied_count = [0]
         mode   = kwargs.get("mode", db_sess.mode)

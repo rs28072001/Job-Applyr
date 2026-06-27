@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { User, Mail, Phone, Briefcase, Award, GraduationCap, FileText, Upload, CheckCircle2, AlertCircle, Loader2, Target, Lightbulb, TrendingUp } from "lucide-react";
 import { api } from "../api/client";
-import type { CVProfile } from "../api/types";
+import type { CVProfile, AppConfig } from "../api/types";
 import { Card } from "../components/ui";
 import ATSDonutChart from "../components/ATSDonutChart";
 
 export default function ResumePage() {
   const [profile, setProfile] = useState<CVProfile | null>(null);
+  const [aiProvider, setAiProvider] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -31,8 +32,17 @@ export default function ResumePage() {
         setLoading(false);
       }
     }
+    async function fetchProvider() {
+      try {
+        const res = await api.get<AppConfig>("/api/config");
+        setAiProvider(res.data.ai_provider || "");
+      } catch { /* ignore */ }
+    }
     fetchProfile();
+    fetchProvider();
   }, []);
+
+  const atsDisabled = aiProvider === "fuzzy" || !aiProvider;
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -114,8 +124,9 @@ export default function ResumePage() {
           {profile && (
             <button
               onClick={handleATSAnalysis}
-              disabled={analyzing}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
+              disabled={analyzing || atsDisabled}
+              title={atsDisabled ? "Know Your ATS needs an AI provider. Select one in Settings." : undefined}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
             >
               {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
               {analyzing ? "Analyzing..." : "Know Your ATS"}

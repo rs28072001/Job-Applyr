@@ -16,6 +16,10 @@ class LLMConfigError(Exception):
 def get_llm_settings(cfg) -> LLMSettings:
     provider = (getattr(cfg, "ai_provider", "") or "azure").lower()
 
+    if provider == "fuzzy":
+        # No-AI mode: matching is done locally by FuzzyClient, no API needed.
+        return LLMSettings(provider="fuzzy", base_url="", api_key="", model="fuzzy")
+
     if provider == "openai":
         return LLMSettings(
             provider="openai",
@@ -58,10 +62,14 @@ def get_llm_settings(cfg) -> LLMSettings:
 
 def is_llm_configured(cfg) -> bool:
     settings = get_llm_settings(cfg)
+    if settings.provider == "fuzzy":
+        return True  # no credentials required for no-AI mode
     return bool(settings.base_url and settings.api_key and settings.model)
 
 
 def validate_llm_settings(settings: LLMSettings) -> None:
+    if settings.provider == "fuzzy":
+        return  # no-AI mode needs no validation
     if not settings.api_key:
         raise LLMConfigError(f"{settings.provider} API key is missing.")
     if not settings.model:

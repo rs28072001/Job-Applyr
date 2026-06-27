@@ -1,4 +1,4 @@
-from ..base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult
+from ..base_platform import BasePlatform, JobListing, JobDetails, ApplicationResult, LoginError
 from . import login, search, job_scraper, apply
 from . import api_search
 
@@ -6,24 +6,67 @@ from . import api_search
 class NaukriPlatform(BasePlatform):
     name = "naukri"
 
+    def __init__(self, driver, config, rate_limiter):
+        super().__init__(driver, config, rate_limiter)
+        self._api_session = None   # requests.Session built from pasted tokens
+        self._current_raw = {}     # raw API record of the job being processed
+
+    def _is_api_mode(self) -> bool:
+        return getattr(self.config, 'naukri_search_mode', 'selenium') == 'api'
+
+    def collect_page_signals(self):
+        # API mode has no live page — synthesize signals from the API record so
+        # the classifier routes correctly (Naukri-internal jobs get scored;
+        # company-site jobs are saved as external).
+        if self._is_api_mode() and self.driver is None:
+            from core.page_signals import PageSignals
+            raw = self._current_raw or {}
+            is_external = bool(raw.get("companyApplyJob"))
+            return PageSignals(
+                platform=self.name,
+                url=raw.get("jdURL", ""),
+                has_internal_apply=not is_external,
+                has_external_apply=is_external,
+            )
+        return super().collect_page_signals()
+
     def check_login(self) -> bool:
         if self.driver is None:
-            # API mode doesn't need login check
+            # API mode: report "logged in" only once we hold an authenticated
+            # session, so ensure_logged_in() triggers login() to create one.
+            if self._is_api_mode():
+                return self._api_session is not None
             return True
         return login.check_login(self.driver, self.config.naukri_userid)
 
     def login(self) -> None:
         if self.driver is None:
-            # API mode doesn't need login
+            # API mode: build a session from the browser-pasted cookie + nkparam
+            # (anonymous search is reCAPTCHA-gated, so these tokens are required).
+            if self._is_api_mode():
+                try:
+                    self._api_session = api_search.build_session(
+                        getattr(self.config, "naukri_cookie", ""),
+                        getattr(self.config, "naukri_nkparam", ""),
+                    )
+                except api_search.NaukriAPIAuthError as e:
+                    raise LoginError(str(e)) from e
             return
         login.login(self.driver, self.config.naukri_userid, self.config.naukri_password)
 
     def search_jobs(self, keywords: list[str], location: str, max_jobs: int) -> list[JobListing]:
         # Use API search mode if configured
-        if getattr(self.config, 'naukri_search_mode', 'selenium') == 'api':
+        if self._is_api_mode():
+            if self._api_session is None:
+                # Defensive: ensure we have a session built from pasted tokens.
+                self._api_session = api_search.build_session(
+                    getattr(self.config, "naukri_cookie", ""),
+                    getattr(self.config, "naukri_nkparam", ""),
+                )
             return _search_each_keyword(
                 lambda kw, limit: api_search.search_jobs_api(
-                    [kw], location, limit, self.rate_limiter
+                    [kw], location, limit, self.rate_limiter,
+                    session=self._api_session,
                 ),
                 keywords,
                 max_jobs,
@@ -44,21 +87,17 @@ class NaukriPlatform(BasePlatform):
         return job_scraper.get_job_description(self.driver, listing, self.rate_limiter)
 
     def get_job_details(self, listing: JobListing) -> JobDetails:
-        # In API mode, parse details from the listing's raw data
-        if getattr(self.config, 'naukri_search_mode', 'selenium') == 'api' and self.driver is None:
-            # For API mode, we need to parse from the listing data
-            # The API search already populates some details in the listing
-            # We'll use a simplified version for now
+        # API mode: every job's full record is already on the listing — parse
+        # rich details (skills, salary, experience, logo, IST posted date) with
+        # no extra request.
+        if self._is_api_mode() and self.driver is None:
+            # Remember this job's raw record for collect_page_signals(), which
+            # the pipeline calls right after this in the same iteration.
+            self._current_raw = listing.raw_data or {}
+            if listing.raw_data:
+                return api_search.get_job_details_api(listing.raw_data)
             return JobDetails(
                 job_description=listing.raw_snippet or "",
-                key_skills=[],
-                experience_required="",
-                salary="",
-                about_company="",
-                posted_date="",
-                applicants_count="",
-                openings="",
-                company_logo_url="",
                 company_name=listing.company or "",
             )
         return job_scraper.get_job_details(self.driver, listing, self.rate_limiter)

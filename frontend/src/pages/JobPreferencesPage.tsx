@@ -55,7 +55,7 @@ export default function JobPreferencesPage() {
   });
 
   const [platforms, setPlatforms] = useState({
-    naukri: { enabled: true, expanded: false, email: "", password: "", search_mode: "selenium" as "selenium" | "api" },
+    naukri: { enabled: true, expanded: false, email: "", password: "", search_mode: "selenium" as "selenium" | "api", cookie: "", nkparam: "" },
     linkedin: { enabled: false, expanded: false, email: "", password: "" },
   });
 
@@ -85,6 +85,8 @@ export default function JobPreferencesPage() {
             email: cfg.naukri_email || "",
             password: cfg.naukri_password || "",
             search_mode: (cfg.naukri_search_mode as "selenium" | "api") || "selenium",
+            cookie: cfg.naukri_cookie || "",
+            nkparam: cfg.naukri_nkparam || "",
           },
           linkedin: {
             enabled: cfg.platform === "linkedin" || cfg.platform === "both",
@@ -130,6 +132,8 @@ export default function JobPreferencesPage() {
         naukri_email: platforms.naukri.email || undefined,
         naukri_password: platforms.naukri.password === SECRET_MASK ? undefined : platforms.naukri.password || undefined,
         naukri_search_mode: platforms.naukri.search_mode,
+        naukri_cookie: platforms.naukri.cookie === SECRET_MASK ? undefined : platforms.naukri.cookie || undefined,
+        naukri_nkparam: platforms.naukri.nkparam === SECRET_MASK ? undefined : platforms.naukri.nkparam || undefined,
         linkedin_email: platforms.linkedin.email || undefined,
         linkedin_password: platforms.linkedin.password === SECRET_MASK ? undefined : platforms.linkedin.password || undefined,
       };
@@ -255,6 +259,49 @@ export default function JobPreferencesPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* API mode auth tokens — pasted from a logged-in browser */}
+                {platforms.naukri.search_mode === "api" && (
+                  <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      API mode needs two values from a logged-in Naukri tab. Open{" "}
+                      <span className="font-semibold">naukri.com</span>, run a job search, then in
+                      DevTools → Network click the <span className="font-mono">search</span> request →
+                      Headers, and copy the <span className="font-mono">cookie</span> and{" "}
+                      <span className="font-mono">nkparam</span> values. These expire after a while —
+                      re-paste fresh values if search stops returning jobs.
+                    </p>
+                    <div>
+                      <Label>Cookie</Label>
+                      <textarea
+                        value={platforms.naukri.cookie}
+                        onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: e.target.value } })}
+                        onFocus={() => { if (platforms.naukri.cookie === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: "" } }); }}
+                        placeholder="_t_ds=...; nauk_at=...; bm_sv=..."
+                        rows={3}
+                        className={`${inputCls} font-mono text-[11px] resize-y`}
+                      />
+                      {platforms.naukri.cookie === SECRET_MASK && (
+                        <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label>nkparam</Label>
+                      <textarea
+                        value={platforms.naukri.nkparam}
+                        onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: e.target.value } })}
+                        onFocus={() => { if (platforms.naukri.nkparam === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: "" } }); }}
+                        placeholder="bf4UNxrqZLus...=="
+                        rows={2}
+                        className={`${inputCls} font-mono text-[11px] resize-y`}
+                      />
+                      {platforms.naukri.nkparam === SECRET_MASK && (
+                        <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Email</Label>

@@ -69,6 +69,9 @@ class Config(Base):
     auto_ignore_skipped     = Column(Boolean, default=True)
     date_posted_filter      = Column(String,  default="any")
     naukri_search_mode      = Column(String,  default="selenium")  # selenium | api
+    # API-mode auth tokens pasted from a logged-in browser (expire frequently).
+    naukri_cookie           = Column(Text,    default="")
+    naukri_nkparam          = Column(Text,    default="")
     updated_at            = Column(DateTime, default=_now, onupdate=_now)
 
 

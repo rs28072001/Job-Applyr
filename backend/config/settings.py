@@ -38,6 +38,9 @@ class Config:
     location: str
     platform_choice: str
     naukri_search_mode: str = "selenium"   # selenium | api
+    # API-mode auth: pasted from a logged-in browser (DevTools > search request)
+    naukri_cookie: str = ""                 # full `cookie` header value
+    naukri_nkparam: str = ""                # `nkparam` header value
     # Safer-automation controls
     easy_apply_only: bool = True            # platform-native apply flows only
     include_external_review: bool = True    # external jobs → manual review queue

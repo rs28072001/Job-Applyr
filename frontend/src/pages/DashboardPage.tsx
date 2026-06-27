@@ -58,14 +58,22 @@ function SessionBanner() {
 function JobRow({ job, onClick }: { job: JobEntry; onClick: () => void }) {
   const initials = (job.company || "?").slice(0, 2).toUpperCase();
   const hue = ((job.company.charCodeAt(0) || 65) * 47) % 360;
+  const [logoOk, setLogoOk] = useState(true);
+  const showLogo = !!job.logo_url && logoOk;
   return (
     <button onClick={onClick}
       className="w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-          style={{ backgroundColor: `hsl(${hue},45%,52%)` }}>
-          {initials}
-        </div>
+        {showLogo ? (
+          <img src={job.logo_url} alt={job.company}
+            onError={() => setLogoOk(false)}
+            className="w-7 h-7 rounded object-contain bg-white border border-slate-100 shrink-0" />
+        ) : (
+          <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+            style={{ backgroundColor: `hsl(${hue},45%,52%)` }}>
+            {initials}
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-medium text-slate-900 text-[13px] truncate">{job.title}</p>
@@ -205,6 +213,8 @@ function toJobEntry(a: ApplicationRecord): JobEntry {
     external_url: a.external_site_url || undefined,
     exp_required: a.experience_required || undefined,
     salary: a.salary || undefined,
+    logo_url: a.company_logo_url || undefined,
+    posted_date: a.posted_date || undefined,
   };
 }
 

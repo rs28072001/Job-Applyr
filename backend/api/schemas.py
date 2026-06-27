@@ -85,6 +85,8 @@ class ConfigUpdate(BaseModel):
     auto_ignore_skipped     : Optional[bool] = None
     date_posted_filter      : Optional[str] = Field(None, pattern="^(any|24h|3d|7d|14d)$")
     naukri_search_mode      : Optional[str] = Field(None, pattern="^(selenium|api)$")
+    naukri_cookie           : Optional[str] = None
+    naukri_nkparam          : Optional[str] = None
 
 
 class ConfigTestRequest(ConfigUpdate):
@@ -204,6 +206,11 @@ class ApplicationRead(BaseModel):
     recommendation    : str = ""
     rationale         : str = ""
     job_description   : str = ""
+    company_logo_url  : str = ""
+    posted_date       : str = ""
+    about_company     : str = ""
+    applicants_count  : str = ""
+    openings          : str = ""
     error_message      : Optional[str]
     timestamp          : datetime
     updated_at         : Optional[datetime] = None

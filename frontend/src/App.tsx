@@ -7,6 +7,7 @@ import HistoryPage from "./pages/HistoryPage";
 import IgnoredJobsPage from "./pages/IgnoredJobsPage";
 import JobPreferencesPage from "./pages/JobPreferencesPage";
 import ResumePage from "./pages/ResumePage";
+import ProfilePage from "./pages/ProfilePage";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="setup" element={<SetupPage />} />
           <Route path="preferences" element={<JobPreferencesPage />} />
           <Route path="resume" element={<ResumePage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="review" element={<ReviewQueuePage />} />
           <Route path="ignored" element={<IgnoredJobsPage />} />
           <Route path="history" element={<HistoryPage />} />

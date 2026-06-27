@@ -1,4 +1,10 @@
-"""Test script for Naukri API search functionality."""
+"""Test script for Naukri API search functionality.
+
+Authenticated search needs real Naukri credentials. Provide them via env vars:
+    NAUKRI_EMAIL=you@example.com NAUKRI_PASSWORD=secret python test_naukri_api_search.py
+Without them, only the offline URL-building test runs.
+"""
+import os
 import sys
 from pathlib import Path
 
@@ -6,7 +12,9 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-from platforms.naukri.api_search import search_jobs_api, _build_search_url
+from platforms.naukri.api_search import (
+    search_jobs_api, _build_search_url, get_authenticated_session, NaukriAPIAuthError,
+)
 
 
 class MockRateLimiter:
@@ -44,20 +52,31 @@ def test_url_building():
 
 
 def test_api_search():
-    """Test actual API search (requires internet)."""
+    """Test actual API search (requires internet + Naukri credentials)."""
     print("\nTesting API search...")
-    
+
+    email = os.getenv("NAUKRI_EMAIL", "")
+    password = os.getenv("NAUKRI_PASSWORD", "")
+    if not email or not password:
+        print("⚠ Skipping: set NAUKRI_EMAIL and NAUKRI_PASSWORD to test authenticated search")
+        return
+
     rate_limiter = MockRateLimiter()
-    
+
     try:
+        print("Logging in via Naukri login API...")
+        session = get_authenticated_session(email, password)
+        print("✓ Login successful")
+
         listings = search_jobs_api(
             keywords=["qa testing"],
             location="gurugram",
             max_jobs=5,
             rate_limiter=rate_limiter,
-            experience=3
+            experience=3,
+            session=session,
         )
-        
+
         print(f"Found {len(listings)} job listings")
         
         if listings:
@@ -77,7 +96,9 @@ def test_api_search():
             print("\n✓ API search test passed")
         else:
             print("⚠ No listings found (might be API issue or no jobs match)")
-            
+
+    except NaukriAPIAuthError as e:
+        print(f"✗ Login failed: {e}")
     except Exception as e:
         print(f"✗ API search test failed: {e}")
         import traceback

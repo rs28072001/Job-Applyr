@@ -37,6 +37,8 @@ _CONFIG_COLUMN_DEFAULTS = {
     "auto_ignore_skipped": "1",
     "date_posted_filter": "'any'",
     "naukri_search_mode": "'selenium'",
+    "naukri_cookie": "''",
+    "naukri_nkparam": "''",
     "ai_provider": "'azure'",
     "openai_api_key": "''",
     "openai_model": "'gpt-4o-mini'",

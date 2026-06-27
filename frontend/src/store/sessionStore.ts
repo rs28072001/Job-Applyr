@@ -20,6 +20,7 @@ export interface JobEntry {
   exp_required?: string;
   salary?: string;
   logo_url?: string;
+  posted_date?: string;
 }
 
 export interface TimelineEntry {
@@ -136,7 +137,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         }
 
         case "job_details":
-          return updateLastJob(state, { exp_required: event.exp_required, salary: event.salary, logo_url: event.logo_url });
+          return updateLastJob(state, { exp_required: event.exp_required, salary: event.salary, logo_url: event.logo_url, posted_date: event.posted_date });
 
         case "job_status": {
           const updates: Partial<JobEntry> = {

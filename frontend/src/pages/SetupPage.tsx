@@ -32,6 +32,7 @@ const AI_PROVIDER_OPTIONS = [
   { value: "gemini", label: "Gemini", key: "gemini_api_key", model: "gemini_model", modelPlaceholder: "gemini-2.5-flash" },
   { value: "groq", label: "Groq", key: "groq_api_key", model: "groq_model", modelPlaceholder: "openai/gpt-oss-120b" },
   { value: "openrouter", label: "OpenRouter", key: "openrouter_api_key", model: "openrouter_model", modelPlaceholder: "openai/gpt-oss-120b" },
+  { value: "fuzzy", label: "Fuzzy (no AI)", key: "", model: "", modelPlaceholder: "" },
 ] as const;
 
 /* ── Stepper ─────────────────────────────────────────────────────────────── */
@@ -226,8 +227,9 @@ export default function SetupPage() {
   }
 
   const activeProvider = AI_PROVIDER_OPTIONS.find((p) => p.value === cfg.ai_provider) ?? AI_PROVIDER_OPTIONS[0];
-  const activeKey = (cfg as any)[activeProvider.key] || "";
-  const activeModel = (cfg as any)[activeProvider.model] || "";
+  const isFuzzy = cfg.ai_provider === "fuzzy";
+  const activeKey = activeProvider.key ? (cfg as any)[activeProvider.key] || "" : "";
+  const activeModel = activeProvider.model ? (cfg as any)[activeProvider.model] || "" : "";
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -249,7 +251,7 @@ export default function SetupPage() {
               </div>
               <LocalOnlyNote text="API keys are stored locally on this machine only." />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className={`grid gap-3 ${isFuzzy ? "grid-cols-1" : "grid-cols-3"}`}>
               <div>
                 <Label>Provider</Label>
                 <select value={cfg.ai_provider}
@@ -258,26 +260,38 @@ export default function SetupPage() {
                   {AI_PROVIDER_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
-              <div>
-                <Label>API Key</Label>
-                <div className="relative">
-                  <Key className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input type="password" value={activeKey} placeholder="Paste key"
-                    onFocus={() => { if (activeKey === SECRET_MASK) setCfg({ ...cfg, [activeProvider.key]: "" }); }}
-                    onChange={(e) => setCfg({ ...cfg, [activeProvider.key]: e.target.value })}
-                    className={`${inputCls} pl-8`} />
-                </div>
-              </div>
-              <div>
-                <Label>Model</Label>
-                <div className="relative">
-                  <Cpu className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input type="text" value={activeModel} placeholder={activeProvider.modelPlaceholder}
-                    onChange={(e) => setCfg({ ...cfg, [activeProvider.model]: e.target.value })}
-                    className={`${inputCls} pl-8`} />
-                </div>
-              </div>
+              {!isFuzzy && (
+                <>
+                  <div>
+                    <Label>API Key</Label>
+                    <div className="relative">
+                      <Key className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input type="password" value={activeKey} placeholder="Paste key"
+                        onFocus={() => { if (activeKey === SECRET_MASK) setCfg({ ...cfg, [activeProvider.key]: "" }); }}
+                        onChange={(e) => setCfg({ ...cfg, [activeProvider.key]: e.target.value })}
+                        className={`${inputCls} pl-8`} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Model</Label>
+                    <div className="relative">
+                      <Cpu className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input type="text" value={activeModel} placeholder={activeProvider.modelPlaceholder}
+                        onChange={(e) => setCfg({ ...cfg, [activeProvider.model]: e.target.value })}
+                        className={`${inputCls} pl-8`} />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
+            {isFuzzy && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                No-AI mode: jobs are scored by keyword &amp; skill overlap against your resume,
+                and resume skills are extracted locally. No API key needed. "Know Your ATS"
+                is disabled in this mode.
+              </p>
+            )}
             {testResult && (
               <p className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
                 testResult.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-600"}`}>
@@ -286,11 +300,13 @@ export default function SetupPage() {
               </p>
             )}
             <div className="flex gap-2">
-              <button onClick={testConnection} disabled={testing}
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 text-xs font-semibold rounded-lg">
-                {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cpu className="w-3.5 h-3.5" />}
-                {testing ? "Testing…" : "Test connection"}
-              </button>
+              {!isFuzzy && (
+                <button onClick={testConnection} disabled={testing}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 text-xs font-semibold rounded-lg">
+                  {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Cpu className="w-3.5 h-3.5" />}
+                  {testing ? "Testing…" : "Test connection"}
+                </button>
+              )}
               <button onClick={saveConfig} disabled={saving}
                 className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 text-xs font-semibold rounded-lg">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
