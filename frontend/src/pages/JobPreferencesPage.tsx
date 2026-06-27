@@ -64,6 +64,9 @@ export default function JobPreferencesPage() {
   const [capturing, setCapturing] = useState(false);
   const [captureMsg, setCaptureMsg] = useState("");
   const [captureError, setCaptureError] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState("");
+  const [testError, setTestError] = useState("");
 
   const SECRET_MASK = "***";
 
@@ -112,6 +115,34 @@ export default function JobPreferencesPage() {
     fetchData();
   }, []);
 
+  async function handleTestTokens() {
+    setTesting(true);
+    setTestMsg("");
+    setTestError("");
+    try {
+      const res = await api.post<{ ok: boolean; message: string; found_jobs: number }>(
+        "/api/naukri/test-tokens",
+        {
+          cookie: platforms.naukri.cookie === SECRET_MASK ? "" : platforms.naukri.cookie,
+          nkparam: platforms.naukri.nkparam === SECRET_MASK ? "" : platforms.naukri.nkparam,
+        }
+      );
+      if (res.data.ok) {
+        setTestMsg(`${res.data.message} (Found ${res.data.found_jobs} job)`);
+      } else {
+        setTestError(res.data.message);
+      }
+    } catch (e: any) {
+      console.error("Token test failed:", e);
+      const detail = e.response?.data?.detail;
+      setTestError(
+        typeof detail === "string" ? detail : detail ? String(detail) : "Token test failed"
+      );
+    } finally {
+      setTesting(false);
+    }
+  }
+
   async function handleCaptureTokens() {
     setCapturing(true);
     setCaptureMsg("");
@@ -150,7 +181,44 @@ export default function JobPreferencesPage() {
 
       const suggested = res.data.keywords;
       const combined = Array.from(new Set([...keywordsText.split(",").map(s => s.trim()).filter(Boolean), ...suggested]));
-      setKeywordsText(combined.join(", "));
+      const newKeywordsText = combined.join(", ");
+      setKeywordsText(newKeywordsText);
+
+      // Auto-save the suggested keywords
+      setTimeout(() => {
+        setSaving(true);
+        try {
+          const platformValue: "naukri" | "linkedin" | "both" = platforms.naukri.enabled && platforms.linkedin.enabled ? "both"
+            : platforms.linkedin.enabled ? "linkedin" : "naukri";
+
+          const payload = {
+            platform: platformValue,
+            mode: prefs.mode,
+            keywords: combined,  // Use the combined keywords directly
+            location: prefs.location,
+            job_target: prefs.job_target,
+            confidence_threshold: prefs.confidence_threshold,
+            easy_apply_only: prefs.easy_apply_only,
+            include_external_review: prefs.include_external_review,
+            hide_previously_skipped: prefs.hide_previously_skipped,
+            auto_ignore_skipped: prefs.auto_ignore_skipped,
+            date_posted_filter: prefs.date_posted_filter,
+            naukri_email: platforms.naukri.email || undefined,
+            naukri_password: platforms.naukri.password === SECRET_MASK ? undefined : platforms.naukri.password || undefined,
+            naukri_search_mode: platforms.naukri.search_mode,
+            naukri_cookie: platforms.naukri.cookie === SECRET_MASK ? undefined : platforms.naukri.cookie || undefined,
+            naukri_nkparam: platforms.naukri.nkparam === SECRET_MASK ? undefined : platforms.naukri.nkparam || undefined,
+            naukri_auto_capture: platforms.naukri.auto_capture,
+            linkedin_email: platforms.linkedin.email || undefined,
+            linkedin_password: platforms.linkedin.password === SECRET_MASK ? undefined : platforms.linkedin.password || undefined,
+          };
+          api.put("/api/config", payload);
+        } catch {
+          // Silently fail - keywords are still shown in UI
+        } finally {
+          setSaving(false);
+        }
+      }, 100);
     } catch (e: any) {
       console.error("Failed to suggest keywords:", e);
       const detail = e.response?.data?.detail;
@@ -230,7 +298,7 @@ export default function JobPreferencesPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-4">
+    <div className="p-6 max-w-5xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -400,6 +468,17 @@ export default function JobPreferencesPage() {
                             <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
                           )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleTestTokens}
+                          disabled={testing || !platforms.naukri.cookie || !platforms.naukri.nkparam}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 text-sm font-semibold rounded-lg transition-colors border border-slate-200"
+                        >
+                          {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : "🔍"}
+                          {testing ? "Testing…" : "Test tokens"}
+                        </button>
+                        {testMsg && <p className="text-[11px] text-emerald-600">{testMsg}</p>}
+                        {testError && <p className="text-[11px] text-red-600">{testError}</p>}
                       </>
                     )}
                   </div>

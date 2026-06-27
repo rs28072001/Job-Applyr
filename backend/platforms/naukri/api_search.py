@@ -218,14 +218,19 @@ def _parse_api_job_details(job_data: dict) -> JobDetails:
         job_data.get("logoPathV3", "") or job_data.get("logoPath", "")
     )
 
+    # Company review data (AmbitionBox) — kept as structured fields for the UI.
+    abox = job_data.get("ambitionBoxData") or {}
+    rating = str(abox.get("AggregateRating") or "").strip()
+    reviews_count = str(abox.get("ReviewsCount") or "").strip()
+    company_url = (
+        job_data.get("staticUrl", "") or abox.get("Url", "")
+    ).strip()
+
     # About company — best-effort from AmbitionBox rating + consultant hiring info
     about_bits = []
-    abox = job_data.get("ambitionBoxData") or {}
-    rating = abox.get("AggregateRating")
-    reviews = abox.get("ReviewsCount")
     if rating:
         about_bits.append(f"AmbitionBox rating {rating}"
-                          + (f" ({reviews} reviews)" if reviews else ""))
+                          + (f" ({reviews_count} reviews)" if reviews_count else ""))
     if job_data.get("consultant") and job_data.get("hiringFor"):
         about_bits.append(f"Hiring for {job_data['hiringFor']}")
     about_company = " · ".join(about_bits)
@@ -255,6 +260,9 @@ def _parse_api_job_details(job_data: dict) -> JobDetails:
         openings=openings,
         company_logo_url=company_logo_url,
         company_name=company_name,
+        rating=rating,
+        reviews_count=reviews_count,
+        company_url=company_url,
     )
 
 

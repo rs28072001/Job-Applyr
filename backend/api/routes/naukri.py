@@ -34,6 +34,17 @@ class CaptureTokensResponse(BaseModel):
     search_url: str
 
 
+class TestTokensRequest(BaseModel):
+    cookie: str
+    nkparam: str
+
+
+class TestTokensResponse(BaseModel):
+    ok: bool
+    message: str
+    found_jobs: int = 0
+
+
 @router.post("/api/naukri/capture-tokens", response_model=CaptureTokensResponse)
 def capture_naukri_tokens(db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
     cfg = db.get(Config, 1)
@@ -82,3 +93,51 @@ def capture_naukri_tokens(db: DBSession = Depends(get_db), _: User = Depends(get
         nkparam_preview=f"{nkparam[:16]}… ({len(nkparam)} chars)",
         search_url=search_url,
     )
+
+
+@router.post("/api/naukri/test-tokens", response_model=TestTokensResponse)
+def test_naukri_tokens(body: TestTokensRequest, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
+    """Test if the provided cookie + nkparam tokens are still valid."""
+    if not body.cookie or not body.nkparam:
+        raise HTTPException(400, "Both cookie and nkparam are required.")
+
+    from platforms.naukri.api_search import build_session, search_jobs_api, NaukriRecaptchaError, NaukriAPIAuthError
+    from utils.rate_limiter import RateLimiter
+
+    try:
+        # Try to build a session with the provided tokens
+        session = build_session(body.cookie, body.nkparam)
+    except NaukriAPIAuthError as e:
+        return TestTokensResponse(
+            ok=False,
+            message=f"Invalid tokens: {str(e)}",
+            found_jobs=0
+        )
+
+    # Try a simple 1-job search to verify tokens work
+    try:
+        rate_limiter = RateLimiter(max_per_hour=999, max_per_day=999)
+        results = search_jobs_api(
+            keywords=["software engineer"],
+            location="india",
+            max_jobs=1,
+            rate_limiter=rate_limiter,
+            session=session,
+        )
+        return TestTokensResponse(
+            ok=True,
+            message="Tokens are valid and working! ✓",
+            found_jobs=len(results)
+        )
+    except NaukriRecaptchaError:
+        return TestTokensResponse(
+            ok=False,
+            message="Tokens have expired or are invalid — Naukri returned a reCAPTCHA challenge. Refresh your tokens.",
+            found_jobs=0
+        )
+    except Exception as e:
+        return TestTokensResponse(
+            ok=False,
+            message=f"Test failed: {str(e) or type(e).__name__}",
+            found_jobs=0
+        )

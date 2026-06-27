@@ -129,7 +129,7 @@ def job_already_applied(title: str) -> None:
     _emit({"type": "job_skip", "reason": "already_applied", "title": title})
 
 
-def job_details_fetched(details) -> None:
+def job_details_fetched(details, location: str = "") -> None:
     t = get()
     t.debug("  [DETAILS] exp=%s  salary=%s  posted=%s  applicants=%s",
             details.experience_required, details.salary,
@@ -139,7 +139,11 @@ def job_details_fetched(details) -> None:
            "salary": details.salary,
            "posted_date": details.posted_date,
            "applicants": details.applicants_count,
-           "logo_url": details.company_logo_url or ""})
+           "logo_url": details.company_logo_url or "",
+           "location": location or "",
+           "rating": getattr(details, "rating", "") or "",
+           "reviews_count": getattr(details, "reviews_count", "") or "",
+           "skills": getattr(details, "key_skills", None) or []})
 
 
 def job_details_failed(url: str, err: Exception) -> None:

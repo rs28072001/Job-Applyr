@@ -88,6 +88,9 @@ def init_db() -> None:
         "recommendation": "''",
         "rationale": "''",
         "evidence_path": "''",
+        "rating": "''",
+        "reviews_count": "''",
+        "company_url": "''",
         "updated_at": "NULL",
     }
     for table, defaults in (("sessions", _SESSION_COLUMN_DEFAULTS),

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   Square, ExternalLink, CheckCircle2, XCircle, AlertCircle, AlertTriangle,
   Inbox, Activity, ListChecks, Mail, Loader2, Search, OctagonX, Download, Play,
+  Briefcase, MapPin, IndianRupee, Star, Clock,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -55,47 +56,114 @@ function SessionBanner() {
 
 /* ── Job row ─────────────────────────────────────────────────────────────── */
 
+/** "2 Days Ago (28 Jun 2026, 10:30 PM IST)" → "2 Days Ago" */
+function postedLabel(posted?: string): string {
+  if (!posted) return "";
+  return posted.split("(")[0].trim();
+}
+
+/** One compact meta item: icon + value (experience / salary / location). */
+function MetaItem({ icon: Icon, value }: { icon: React.ElementType; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0">
+      <Icon className="w-3 h-3 text-slate-400 shrink-0" />
+      <span className="truncate">{value}</span>
+    </span>
+  );
+}
+
 function JobRow({ job, onClick }: { job: JobEntry; onClick: () => void }) {
   const initials = (job.company || "?").slice(0, 2).toUpperCase();
   const hue = ((job.company.charCodeAt(0) || 65) * 47) % 360;
   const [logoOk, setLogoOk] = useState(true);
   const showLogo = !!job.logo_url && logoOk;
+
+  const posted = postedLabel(job.posted_date);
+  const skills = job.skills?.slice(0, 6) ?? [];
+  const moreSkills = (job.skills?.length ?? 0) - skills.length;
+  const hasMeta = job.exp_required || job.salary || job.location;
+
   return (
-    <button onClick={onClick}
-      className="w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors">
-      <div className="flex items-center gap-3">
+    <div onClick={onClick} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
+      className="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer">
+      <div className="flex items-start gap-3">
         {showLogo ? (
           <img src={job.logo_url} alt={job.company}
             onError={() => setLogoOk(false)}
-            className="w-7 h-7 rounded object-contain bg-white border border-slate-100 shrink-0" />
+            className="w-9 h-9 rounded object-contain bg-white border border-slate-100 shrink-0" />
         ) : (
-          <div className="w-7 h-7 rounded flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+          <div className="w-9 h-9 rounded flex items-center justify-center text-white text-[11px] font-bold shrink-0"
             style={{ backgroundColor: `hsl(${hue},45%,52%)` }}>
             {initials}
           </div>
         )}
+
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-slate-900 text-[13px] truncate">{job.title}</p>
-            <span className="text-[11px] text-slate-400 shrink-0">{job.company}</span>
+          {/* Title + company + rating, with score/status pinned right */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-[13px] truncate">{job.title}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 text-[11px] min-w-0">
+                <span className="text-slate-500 truncate">{job.company}</span>
+                {job.rating && (
+                  <span className="inline-flex items-center gap-0.5 shrink-0">
+                    <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+                    <span className="font-medium text-slate-600">{job.rating}</span>
+                    {job.reviews_count && (
+                      <span className="text-slate-400">| {job.reviews_count} reviews</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <ScorePill score={job.score} />
+              <StatusBadge status={job.status} />
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+
+          {/* Experience · Salary · Location */}
+          {hasMeta && (
+            <div className="flex items-center gap-x-3 gap-y-1 mt-1.5 flex-wrap text-[11px] text-slate-600">
+              {job.exp_required && <MetaItem icon={Briefcase} value={job.exp_required} />}
+              {job.salary && <MetaItem icon={IndianRupee} value={job.salary} />}
+              {job.location && <MetaItem icon={MapPin} value={job.location} />}
+            </div>
+          )}
+
+          {/* Skill chips */}
+          {skills.length > 0 && (
+            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+              {skills.map((s) => (
+                <span key={s} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">{s}</span>
+              ))}
+              {moreSkills > 0 && <span className="text-[10px] text-slate-400">+{moreSkills} more</span>}
+            </div>
+          )}
+
+          {/* Footer: classification · skip reason · posting age · open link */}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <ClassificationBadge classification={job.classification} />
             {job.failure_reason && (
               <span className="text-[11px] text-slate-400 truncate">{failureLabel(job.failure_reason)}</span>
             )}
+            {posted && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                <Clock className="w-3 h-3" />{posted}
+              </span>
+            )}
+            {job.url && (
+              <a href={job.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                aria-label="Open job posting"
+                className="ml-auto inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-500 shrink-0">
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
         </div>
-        <ScorePill score={job.score} />
-        <StatusBadge status={job.status} />
-        {job.url && (
-          <a href={job.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            aria-label="Open job posting" className="text-slate-300 hover:text-indigo-500 shrink-0">
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -215,6 +283,13 @@ function toJobEntry(a: ApplicationRecord): JobEntry {
     salary: a.salary || undefined,
     logo_url: a.company_logo_url || undefined,
     posted_date: a.posted_date || undefined,
+    location: a.location || undefined,
+    skills: a.key_skills?.length ? a.key_skills : undefined,
+    rating: a.rating || undefined,
+    reviews_count: a.reviews_count || undefined,
+    company_url: a.company_url || undefined,
+    about_company: a.about_company || undefined,
+    openings: a.openings || undefined,
   };
 }
 

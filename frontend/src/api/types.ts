@@ -139,6 +139,9 @@ export interface ApplicationRecord {
   rationale: string;
   job_description: string;
   company_logo_url: string;
+  rating: string;
+  reviews_count: string;
+  company_url: string;
   posted_date: string;
   about_company: string;
   applicants_count: string;
@@ -212,7 +215,7 @@ export type WSEvent =
   | { type: "search"; platform: string; keywords: string[]; count: number }
   | { type: "job_start"; idx: number; total: number; title: string; company: string; url: string }
   | { type: "job_skip"; reason: string; title: string }
-  | { type: "job_details"; exp_required: string; salary: string; posted_date: string; applicants: string; logo_url: string }
+  | { type: "job_details"; exp_required: string; salary: string; posted_date: string; applicants: string; logo_url: string; location?: string; rating?: string; reviews_count?: string; skills?: string[] }
   | { type: "job_status"; application_id: number; status: AppStatus; failure_reason: string; classification: JobClassification; title: string; company: string }
   | { type: "job_classified"; application_id: number; classification: JobClassification; title: string }
   | { type: "outreach_drafted"; application_id: number; draft_id: number; email: string; source_url: string }

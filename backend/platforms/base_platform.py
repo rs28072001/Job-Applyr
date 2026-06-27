@@ -29,6 +29,9 @@ class JobDetails:
     openings: str = ""
     company_logo_url: str = ""
     company_name: str = ""
+    rating: str = ""           # AmbitionBox AggregateRating, e.g. "3.9"
+    reviews_count: str = ""    # AmbitionBox ReviewsCount, e.g. "24283"
+    company_url: str = ""      # company / reviews page
 
 
 @dataclass

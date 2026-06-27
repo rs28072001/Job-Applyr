@@ -144,6 +144,9 @@ class Application(Base):
     applicants_count    = Column(String,  default="")
     openings            = Column(String,  default="")
     company_logo_url    = Column(String,  default="")
+    rating              = Column(String,  default="")   # AmbitionBox AggregateRating, e.g. "3.9"
+    reviews_count       = Column(String,  default="")   # AmbitionBox ReviewsCount, e.g. "24283"
+    company_url         = Column(String,  default="")   # company / reviews page (staticUrl)
     external_site_url   = Column(String,  default="")
     matched_skills      = Column(JSON,    default=list)
     missing_skills      = Column(JSON,    default=list)

@@ -371,7 +371,7 @@ def _run_platform_db(
     manual_review | email_drafted → applied | failed | stopped
     """
     import core.tracker as tracker
-    from api.models import Application
+    from api.models import Application, CVProfile
     from api.pipeline import (
         create_outreach_draft, daily_cap_reached, decide_apply,
         is_duplicate_company, refresh_session_counters, set_app_status,
@@ -409,7 +409,62 @@ def _run_platform_db(
 
     # Search (LinkedIn applies the platform Easy Apply filter when enabled)
     max_fetch = min((job_target - applied_count[0]) * 5, 100)
-    listings  = platform.search_jobs(keywords, location, max_fetch)
+    listings = []
+    try:
+        listings = platform.search_jobs(keywords, location, max_fetch)
+    except Exception as e:
+        # If Naukri API mode fails with reCAPTCHA (tokens expired), auto-capture fresh ones and retry.
+        from platforms.naukri.api_search import NaukriRecaptchaError
+        if isinstance(e, NaukriRecaptchaError) and platform_name == "naukri":
+            logger.info("Naukri API tokens expired; auto-capturing fresh ones...")
+            try:
+                from platforms.naukri.token_capture import capture_tokens
+                import os, hashlib
+                # Recalculate user_data_dir (mirroring app_chrome_profile_dir logic from _run_session_sync)
+                backend_dir = os.path.dirname(os.path.dirname(__file__))
+                override = os.getenv("CHROME_USER_DATA_DIR", "").strip()
+                if override:
+                    user_data_dir = override if os.path.isabs(override) else os.path.join(backend_dir, override)
+                else:
+                    # Get first available email for identity
+                    from api.models import Config as ConfigModel
+                    cfg = db.get(ConfigModel, 1)
+                    identity = ((cfg.naukri_email or cfg.linkedin_email or "no-platform-account") if cfg else "no-platform-account").strip().lower()
+                    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+                    user_data_dir = os.path.join(backend_dir, "data", "chrome_profiles", digest)
+
+                # Get experience from CV for contextual token capture
+                cv = db.query(CVProfile).filter_by(is_active=True).order_by(CVProfile.id.desc()).first()
+                experience = None
+                if cv and cv.experience_years:
+                    try:
+                        experience = int(cv.experience_years)
+                    except (ValueError, TypeError):
+                        pass
+
+                cookie, nkparam = capture_tokens(keywords[0] if keywords else "software developer", location, user_data_dir, experience)
+                # Save refreshed tokens to config
+                from api.models import Config as ConfigModel
+                cfg = db.get(ConfigModel, 1)
+                if cfg:
+                    cfg.naukri_cookie = cookie
+                    cfg.naukri_nkparam = nkparam
+                    db.commit()
+                logger.info("Auto-captured fresh tokens; retrying search...")
+                log_event(db, session_id, "naukri_tokens_auto_refreshed", {})
+                # Rebuild platform's API session with fresh tokens
+                from platforms.naukri.api_search import build_session
+                platform._api_session = build_session(cookie, nkparam)
+                # Retry the search
+                listings = platform.search_jobs(keywords, location, max_fetch)
+            except Exception as retry_err:
+                logger.error("Auto-capture failed: %s", retry_err)
+                log_event(db, session_id, "search_failed", {"platform": platform_name, "error": str(e)})
+                return
+        else:
+            log_event(db, session_id, "search_failed", {"platform": platform_name, "error": str(e)})
+            return
+
     tracker.search_results(platform_name, keywords, len(listings))
 
     if not listings:
@@ -530,7 +585,7 @@ def _run_platform_db(
             details = JobDetails(job_description=listing.title)
             try:
                 details = platform.get_job_details(listing)
-                tracker.job_details_fetched(details)
+                tracker.job_details_fetched(details, location=listing.location)
             except Exception as e:
                 tracker.job_details_failed(listing.url, e)
 
@@ -544,6 +599,9 @@ def _run_platform_db(
             app.applicants_count    = details.applicants_count
             app.openings            = details.openings
             app.company_logo_url    = details.company_logo_url
+            app.rating              = details.rating
+            app.reviews_count       = details.reviews_count
+            app.company_url         = details.company_url
             db.commit()
 
             if not is_within_posted_filter(app.posted_date, getattr(settings, "date_posted_filter", "any")):

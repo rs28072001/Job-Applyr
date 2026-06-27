@@ -21,6 +21,13 @@ export interface JobEntry {
   salary?: string;
   logo_url?: string;
   posted_date?: string;
+  location?: string;
+  skills?: string[];
+  rating?: string;
+  reviews_count?: string;
+  company_url?: string;
+  about_company?: string;
+  openings?: string;
 }
 
 export interface TimelineEntry {
@@ -141,7 +148,14 @@ export const useSessionStore = create<SessionState>((set) => ({
         }
 
         case "job_details":
-          return updateLastJob(state, { exp_required: event.exp_required, salary: event.salary, logo_url: event.logo_url, posted_date: event.posted_date });
+          return updateLastJob(state, {
+            exp_required: event.exp_required, salary: event.salary,
+            logo_url: event.logo_url, posted_date: event.posted_date,
+            location: event.location || undefined,
+            rating: event.rating || undefined,
+            reviews_count: event.reviews_count || undefined,
+            skills: event.skills?.length ? event.skills : undefined,
+          });
 
         case "job_status": {
           const updates: Partial<JobEntry> = {
