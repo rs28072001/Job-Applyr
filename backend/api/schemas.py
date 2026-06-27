@@ -41,6 +41,7 @@ class ConfigRead(BaseModel):
     auto_ignore_skipped     : bool = True
     date_posted_filter      : str = "any"
     naukri_search_mode      : str = "selenium"  # selenium | api
+    naukri_auto_capture     : bool = False
     is_configured         : bool = False  # True when all required fields set
 
     class Config:
@@ -72,6 +73,7 @@ class ConfigUpdate(BaseModel):
     platform              : Optional[str] = Field(None, pattern="^(naukri|linkedin|both)$")
     mode                  : Optional[str] = Field(None, pattern="^(search|search_and_apply)$")
     location              : Optional[str] = None
+    keywords              : Optional[list[str]] = None
     job_target            : Optional[int] = None
     easy_apply_only         : Optional[bool] = None
     include_external_review : Optional[bool] = None
@@ -87,6 +89,7 @@ class ConfigUpdate(BaseModel):
     naukri_search_mode      : Optional[str] = Field(None, pattern="^(selenium|api)$")
     naukri_cookie           : Optional[str] = None
     naukri_nkparam          : Optional[str] = None
+    naukri_auto_capture     : Optional[bool] = None
 
 
 class ConfigTestRequest(ConfigUpdate):

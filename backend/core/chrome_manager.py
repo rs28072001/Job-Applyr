@@ -239,6 +239,40 @@ def get_driver(port: int) -> webdriver.Chrome:
     return driver
 
 
+def get_capture_driver(user_data_dir: str) -> webdriver.Chrome:
+    """Launch a dedicated Chrome with CDP performance logging enabled.
+
+    Unlike get_driver() (which *attaches* to a running debug Chrome via
+    debuggerAddress — where performance logging is unreliable), this LAUNCHES
+    its own Chrome so `driver.get_log("performance")` reliably surfaces
+    Network.requestWillBeSent events. Used to scrape the cookie + nkparam
+    headers off Naukri's search XHR. The browser runs visibly so any login /
+    bot-check the user must complete is interactive.
+    """
+    Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+    write_local_profile_preferences(user_data_dir)
+
+    options = Options()
+    options.add_argument(f"--user-data-dir={user_data_dir}")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    options.add_argument("--disable-save-password-bubble")
+    options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    driver.execute_cdp_cmd(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
+    )
+
+    return driver
+
+
 def ensure_chrome_running(port: int, user_data_dir: str) -> webdriver.Chrome:
     ensure_matching_chrome_profile(port, user_data_dir)
 

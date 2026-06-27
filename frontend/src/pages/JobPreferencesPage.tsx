@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { api } from "../api/client";
-import type { AppConfig } from "../api/types";
+import type { AppConfig, CVProfile } from "../api/types";
 import { Card, LocalOnlyNote } from "../components/ui";
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -40,6 +40,8 @@ export default function JobPreferencesPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [keywordsText, setKeywordsText] = useState("");
+  const [suggestingKeywords, setSuggestingKeywords] = useState(false);
+  const [suggestError, setSuggestError] = useState("");
 
   const [prefs, setPrefs] = useState({
     platform: "naukri" as "naukri" | "linkedin" | "both",
@@ -55,9 +57,13 @@ export default function JobPreferencesPage() {
   });
 
   const [platforms, setPlatforms] = useState({
-    naukri: { enabled: true, expanded: false, email: "", password: "", search_mode: "selenium" as "selenium" | "api", cookie: "", nkparam: "" },
+    naukri: { enabled: true, expanded: false, email: "", password: "", search_mode: "selenium" as "selenium" | "api", cookie: "", nkparam: "", auto_capture: false },
     linkedin: { enabled: false, expanded: false, email: "", password: "" },
   });
+
+  const [capturing, setCapturing] = useState(false);
+  const [captureMsg, setCaptureMsg] = useState("");
+  const [captureError, setCaptureError] = useState("");
 
   const SECRET_MASK = "***";
 
@@ -87,6 +93,7 @@ export default function JobPreferencesPage() {
             search_mode: (cfg.naukri_search_mode as "selenium" | "api") || "selenium",
             cookie: cfg.naukri_cookie || "",
             nkparam: cfg.naukri_nkparam || "",
+            auto_capture: cfg.naukri_auto_capture ?? false,
           },
           linkedin: {
             enabled: cfg.platform === "linkedin" || cfg.platform === "both",
@@ -95,6 +102,7 @@ export default function JobPreferencesPage() {
             password: cfg.linkedin_password || "",
           },
         });
+        setKeywordsText((cfg.keywords || []).join(", "));
       } catch (e) {
         console.error("Failed to fetch preferences:", e);
       } finally {
@@ -103,6 +111,58 @@ export default function JobPreferencesPage() {
     }
     fetchData();
   }, []);
+
+  async function handleCaptureTokens() {
+    setCapturing(true);
+    setCaptureMsg("");
+    setCaptureError("");
+    try {
+      const res = await api.post<{ ok: boolean; cookie_preview: string; nkparam_preview: string }>(
+        "/api/naukri/capture-tokens"
+      );
+      // Backend saved + switched to API mode; reflect that locally with masked values.
+      setPlatforms((p) => ({
+        ...p,
+        naukri: { ...p.naukri, search_mode: "api", cookie: SECRET_MASK, nkparam: SECRET_MASK },
+      }));
+      setCaptureMsg(`Captured ✓  cookie ${res.data.cookie_preview} · nkparam ${res.data.nkparam_preview}`);
+    } catch (e: any) {
+      console.error("Token capture failed:", e);
+      const detail = e.response?.data?.detail;
+      setCaptureError(
+        typeof detail === "string" ? detail : detail ? String(detail) : "Token capture failed"
+      );
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  async function handleSuggestKeywords() {
+    setSuggestingKeywords(true);
+    setSuggestError("");
+    try {
+      const profileRes = await api.get<CVProfile>("/api/cv/profile");
+      const profile = profileRes.data;
+
+      const res = await api.post<{ keywords: string[] }>("/api/cv/suggest-keywords", {
+        cv_text: profile.raw_text || `${profile.name}\n${profile.job_titles?.join(", ")}\n${profile.skills?.join(", ")}`,
+      });
+
+      const suggested = res.data.keywords;
+      const combined = Array.from(new Set([...keywordsText.split(",").map(s => s.trim()).filter(Boolean), ...suggested]));
+      setKeywordsText(combined.join(", "));
+    } catch (e: any) {
+      console.error("Failed to suggest keywords:", e);
+      const detail = e.response?.data?.detail;
+      setSuggestError(
+        typeof detail === "string" ? detail
+        : detail ? String(detail)
+        : "Failed to suggest keywords"
+      );
+    } finally {
+      setSuggestingKeywords(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -121,6 +181,7 @@ export default function JobPreferencesPage() {
       const payload = {
         platform: platformValue,
         mode: prefs.mode,
+        keywords: keywordsText.split(",").map((s) => s.trim()).filter(Boolean),
         location: prefs.location,
         job_target: prefs.job_target,
         confidence_threshold: prefs.confidence_threshold,
@@ -134,6 +195,7 @@ export default function JobPreferencesPage() {
         naukri_search_mode: platforms.naukri.search_mode,
         naukri_cookie: platforms.naukri.cookie === SECRET_MASK ? undefined : platforms.naukri.cookie || undefined,
         naukri_nkparam: platforms.naukri.nkparam === SECRET_MASK ? undefined : platforms.naukri.nkparam || undefined,
+        naukri_auto_capture: platforms.naukri.auto_capture,
         linkedin_email: platforms.linkedin.email || undefined,
         linkedin_password: platforms.linkedin.password === SECRET_MASK ? undefined : platforms.linkedin.password || undefined,
       };
@@ -260,45 +322,86 @@ export default function JobPreferencesPage() {
                   </div>
                 </div>
 
-                {/* API mode auth tokens — pasted from a logged-in browser */}
+                {/* API mode auth tokens */}
                 {platforms.naukri.search_mode === "api" && (
                   <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      API mode needs two values from a logged-in Naukri tab. Open{" "}
-                      <span className="font-semibold">naukri.com</span>, run a job search, then in
-                      DevTools → Network click the <span className="font-mono">search</span> request →
-                      Headers, and copy the <span className="font-mono">cookie</span> and{" "}
-                      <span className="font-mono">nkparam</span> values. These expire after a while —
-                      re-paste fresh values if search stops returning jobs.
-                    </p>
-                    <div>
-                      <Label>Cookie</Label>
-                      <textarea
-                        value={platforms.naukri.cookie}
-                        onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: e.target.value } })}
-                        onFocus={() => { if (platforms.naukri.cookie === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: "" } }); }}
-                        placeholder="_t_ds=...; nauk_at=...; bm_sv=..."
-                        rows={3}
-                        className={`${inputCls} font-mono text-[11px] resize-y`}
-                      />
-                      {platforms.naukri.cookie === SECRET_MASK && (
-                        <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label>nkparam</Label>
-                      <textarea
-                        value={platforms.naukri.nkparam}
-                        onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: e.target.value } })}
-                        onFocus={() => { if (platforms.naukri.nkparam === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: "" } }); }}
-                        placeholder="bf4UNxrqZLus...=="
-                        rows={2}
-                        className={`${inputCls} font-mono text-[11px] resize-y`}
-                      />
-                      {platforms.naukri.nkparam === SECRET_MASK && (
-                        <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
-                      )}
-                    </div>
+                    {/* Auto-capture toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, auto_capture: !platforms.naukri.auto_capture } })}
+                      className="w-full flex items-start gap-3 p-2 rounded-lg hover:bg-white/60 text-left transition-colors"
+                    >
+                      <span className={`mt-0.5 w-8 h-[18px] rounded-full relative transition-colors shrink-0
+                        ${platforms.naukri.auto_capture ? "bg-indigo-600" : "bg-slate-300"}`}>
+                        <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all
+                          ${platforms.naukri.auto_capture ? "left-[18px]" : "left-[2px]"}`} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="text-sm font-medium text-slate-800">Auto-detect tokens (recommended)</span>
+                        <span className="block text-[11px] text-slate-500 mt-0.5">
+                          Opens a real browser, runs your search, and grabs the cookie + nkparam for you — no DevTools copy-paste.
+                        </span>
+                      </span>
+                    </button>
+
+                    {platforms.naukri.auto_capture ? (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleCaptureTokens}
+                          disabled={capturing}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+                        >
+                          {capturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                          {capturing ? "Capturing… (a browser window will open)" : "Detect tokens now"}
+                        </button>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          A Chrome window opens and navigates to your Naukri search. Keep it open until it
+                          closes itself. If a captcha appears, solve it in that window. Tokens expire after
+                          a while — click again whenever search stops returning jobs.
+                        </p>
+                        {captureMsg && <p className="text-[11px] text-emerald-600">{captureMsg}</p>}
+                        {captureError && <p className="text-[11px] text-red-600">{captureError}</p>}
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          Paste two values from a logged-in Naukri tab. Open{" "}
+                          <span className="font-semibold">naukri.com</span>, run a job search, then in
+                          DevTools → Network click the <span className="font-mono">search</span> request →
+                          Headers, and copy the <span className="font-mono">cookie</span> and{" "}
+                          <span className="font-mono">nkparam</span> values.
+                        </p>
+                        <div>
+                          <Label>Cookie</Label>
+                          <textarea
+                            value={platforms.naukri.cookie}
+                            onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: e.target.value } })}
+                            onFocus={() => { if (platforms.naukri.cookie === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, cookie: "" } }); }}
+                            placeholder="_t_ds=...; nauk_at=...; bm_sv=..."
+                            rows={3}
+                            className={`${inputCls} font-mono text-[11px] resize-y`}
+                          />
+                          {platforms.naukri.cookie === SECRET_MASK && (
+                            <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label>nkparam</Label>
+                          <textarea
+                            value={platforms.naukri.nkparam}
+                            onChange={(e) => setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: e.target.value } })}
+                            onFocus={() => { if (platforms.naukri.nkparam === SECRET_MASK) setPlatforms({ ...platforms, naukri: { ...platforms.naukri, nkparam: "" } }); }}
+                            placeholder="bf4UNxrqZLus...=="
+                            rows={2}
+                            className={`${inputCls} font-mono text-[11px] resize-y`}
+                          />
+                          {platforms.naukri.nkparam === SECRET_MASK && (
+                            <p className="mt-1 text-[11px] text-emerald-600">Saved locally. Paste a new value only to replace it.</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -424,12 +527,27 @@ export default function JobPreferencesPage() {
             </div>
           </div>
           <div className="col-span-2">
-            <Label>Target job titles / keywords</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label>Target job titles / keywords</Label>
+              <button
+                type="button"
+                onClick={handleSuggestKeywords}
+                disabled={suggestingKeywords}
+                title="Auto-detect job titles from your resume using AI"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {suggestingKeywords ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                {suggestingKeywords ? "Detecting..." : "Auto-detect"}
+              </button>
+            </div>
             <input value={keywordsText} onChange={(e) => setKeywordsText(e.target.value)}
               placeholder="QA Engineer, SDET, Automation Engineer" className={inputCls} />
             <p className="mt-1 text-[11px] text-slate-400">
               Comma-separated. Only these are searched; unrelated titles are skipped as "title mismatch" before scoring.
             </p>
+            {suggestError && (
+              <p className="mt-2 text-[11px] text-red-600">{suggestError}</p>
+            )}
           </div>
           <div>
             <Label>Location</Label>

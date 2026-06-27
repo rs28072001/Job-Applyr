@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { User, Settings as SettingsIcon, Sliders, Camera, AlertTriangle, Trash2, Loader2, CheckCircle2, ShieldCheck } from "lucide-react";
 import { api } from "../api/client";
+import type { CVProfile } from "../api/types";
 import { useAuthStore } from "../store/authStore";
 import { useSessionStore } from "../store/sessionStore";
 import SetupPage from "./SetupPage";
@@ -25,6 +26,16 @@ function AccountTab() {
 
   const [name, setName] = useState(fullName || "");
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (fullName) return; // already set, don't overwrite
+    api.get<CVProfile>("/api/cv/profile").then((r) => {
+      if (r.data?.name) {
+        setName(r.data.name);
+        setFullName(r.data.name);
+      }
+    }).catch(() => {});
+  }, []);
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState<string | null>(null);
   const [resetError, setResetError] = useState("");

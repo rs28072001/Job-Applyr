@@ -37,6 +37,7 @@ export interface AppConfig {
   platform: "naukri" | "linkedin" | "both";
   mode: "search" | "search_and_apply";
   location: string;
+  keywords: string[];
   job_target: number;
   easy_apply_only: boolean;
   include_external_review: boolean;
@@ -47,6 +48,7 @@ export interface AppConfig {
   naukri_search_mode: "selenium" | "api";
   naukri_cookie: string;          // "***" when set
   naukri_nkparam: string;         // "***" when set
+  naukri_auto_capture: boolean;   // auto-capture tokens via browser
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;

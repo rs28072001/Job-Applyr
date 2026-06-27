@@ -25,6 +25,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 _CONFIG_COLUMN_DEFAULTS = {
+    "keywords": "'[]'",
     "easy_apply_only": "1",
     "include_external_review": "1",
     "outreach_mode": "'draft_only'",
@@ -39,6 +40,7 @@ _CONFIG_COLUMN_DEFAULTS = {
     "naukri_search_mode": "'selenium'",
     "naukri_cookie": "''",
     "naukri_nkparam": "''",
+    "naukri_auto_capture": "0",
     "ai_provider": "'azure'",
     "openai_api_key": "''",
     "openai_model": "'gpt-4o-mini'",
@@ -127,7 +129,11 @@ def init_db() -> None:
         with engine.begin() as conn:
             for name, default in _CONFIG_COLUMN_DEFAULTS.items():
                 if name not in existing:
-                    conn.execute(text(f"ALTER TABLE config ADD COLUMN {name} VARCHAR DEFAULT {default}"))
+                    # Boolean defaults ("0"/"1") need INTEGER affinity — on a
+                    # TEXT/VARCHAR column SQLite stores False as the string '0',
+                    # which Python reads back as truthy (bool('0') is True).
+                    col_type = "INTEGER" if default in ("0", "1") else "VARCHAR"
+                    conn.execute(text(f"ALTER TABLE config ADD COLUMN {name} {col_type} DEFAULT {default}"))
             if "grok_api_key" in existing and "groq_api_key" not in existing:
                 conn.execute(text("UPDATE config SET groq_api_key = COALESCE(NULLIF(grok_api_key, ''), groq_api_key)"))
             if "grok_model" in existing and "groq_model" not in existing:

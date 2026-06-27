@@ -1,4 +1,4 @@
-"""POST /api/cv/parse  ·  GET /api/cv/profile  ·  PUT /api/cv/profile  ·  POST /api/cv/ats-analyze"""
+"""POST /api/cv/parse  ·  GET /api/cv/profile  ·  PUT /api/cv/profile  ·  POST /api/cv/ats-analyze  ·  POST /api/cv/suggest-keywords"""
 import os
 import pathlib
 
@@ -215,3 +215,78 @@ Respond in JSON format with this exact structure:
     except Exception as e:
         print(f"ATS analysis error: {e}")
         raise HTTPException(500, f"ATS analysis failed: {str(e)}")
+
+
+class SuggestKeywordsRequest(BaseModel):
+    cv_text: str
+
+
+class SuggestKeywordsResponse(BaseModel):
+    keywords: list[str]
+
+
+@router.post("/api/cv/suggest-keywords", response_model=SuggestKeywordsResponse)
+def suggest_keywords(body: SuggestKeywordsRequest, db: DBSession = Depends(get_db), _: User = Depends(get_current_user)):
+    if not body.cv_text or not body.cv_text.strip():
+        raise HTTPException(400, "CV text is empty")
+
+    from api.models import Config as ConfigModel
+    from core.llm_provider import get_llm_settings, is_llm_configured, validate_llm_settings, LLMConfigError
+    from openai import OpenAI
+
+    cfg = db.get(ConfigModel, 1)
+    llm_settings = get_llm_settings(cfg) if cfg else None
+
+    if llm_settings and llm_settings.provider == "fuzzy":
+        raise HTTPException(400, "Keyword suggestion needs an AI provider. Use non-fuzzy mode in Settings.")
+    if not cfg or not is_llm_configured(cfg):
+        raise HTTPException(400, "LLM credentials not configured. Complete setup first.")
+    try:
+        validate_llm_settings(llm_settings)
+    except LLMConfigError as e:
+        raise HTTPException(400, str(e))
+
+    system_prompt = """You are an expert recruiter and career coach. Analyze the provided resume and suggest 3-5 relevant job titles/keywords that this candidate should target when job searching.
+
+Focus on:
+- Primary job titles that match their experience level and skills
+- Common industry role variations and synonyms
+- Emerging titles in their field
+- Entry points for skill transitions
+
+Return ONLY a JSON object with "keywords" as an array of strings. Example:
+{"keywords": ["QA Engineer", "Test Automation Engineer", "SDET", "Quality Assurance Lead"]}"""
+
+    user_prompt = f"Resume:\n\n{body.cv_text}\n\nSuggest relevant job titles this candidate should target."
+
+    try:
+        client = OpenAI(
+            base_url=llm_settings.base_url,
+            api_key=llm_settings.api_key,
+        )
+
+        response = client.chat.completions.create(
+            model=llm_settings.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+        )
+
+        import json
+        import re
+        text = response.choices[0].message.content.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+
+        result = json.loads(text)
+        keywords = result.get("keywords", [])
+        if not isinstance(keywords, list):
+            keywords = [str(keywords)]
+
+        return SuggestKeywordsResponse(keywords=keywords[:10])
+    except Exception as e:
+        print(f"Keyword suggestion error: {e}")
+        raise HTTPException(500, f"Keyword suggestion failed: {str(e)}")

@@ -128,6 +128,10 @@ export const useSessionStore = create<SessionState>((set) => ({
           };
 
         case "job_start": {
+          // Deduplicate: don't add if a job with this idx already exists
+          if (state.jobs.some((j) => j.idx === event.idx)) {
+            return state;
+          }
           const newJob: JobEntry = {
             idx: event.idx, total: event.total,
             title: event.title, company: event.company, url: event.url,
@@ -232,6 +236,11 @@ function ts(): string {
 }
 
 function addLog(logs: TimelineEntry[], ts: string, level: string, msg: string): TimelineEntry[] {
+  // Deduplicate: skip if the last log has the same level and message
+  const last = logs[logs.length - 1];
+  if (last && last.level === level && last.msg === msg) {
+    return logs;
+  }
   const next = [...logs, { ts, level, msg }];
   return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next;
 }

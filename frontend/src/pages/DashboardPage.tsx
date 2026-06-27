@@ -294,13 +294,18 @@ export default function DashboardPage() {
       const configRes = await api.get<AppConfig>("/api/config");
       const cfg = configRes.data;
 
-      // Get keywords from CV profile if not set
-      let keywords: string[] = [];
-      try {
-        const cvRes = await api.get("/api/cv/profile");
-        const cv = cvRes.data;
-        keywords = cv.job_titles || [];
-      } catch {
+      // Keywords: prefer the saved Job Preferences keywords; fall back to the
+      // CV's parsed job titles, then a generic default.
+      let keywords: string[] = cfg.keywords || [];
+      if (keywords.length === 0) {
+        try {
+          const cvRes = await api.get("/api/cv/profile");
+          keywords = cvRes.data.job_titles || [];
+        } catch {
+          keywords = [];
+        }
+      }
+      if (keywords.length === 0) {
         keywords = ["Software Engineer"];
       }
 

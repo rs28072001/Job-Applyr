@@ -54,6 +54,7 @@ class Config(Base):
     platform              = Column(String,  default="naukri")  # naukri | linkedin | both
     mode                  = Column(String,  default="search_and_apply")  # search | search_and_apply
     location              = Column(String,  default="gurugram")
+    keywords              = Column(JSON,    default=list)  # target job titles / keywords
     job_target            = Column(Integer, default=5)
     # Safer-automation defaults
     easy_apply_only         = Column(Boolean, default=True)   # platform-native flows only
@@ -72,6 +73,9 @@ class Config(Base):
     # API-mode auth tokens pasted from a logged-in browser (expire frequently).
     naukri_cookie           = Column(Text,    default="")
     naukri_nkparam          = Column(Text,    default="")
+    # When on, the cookie/nkparam are captured automatically via a real browser
+    # (Selenium CDP) instead of being pasted by hand.
+    naukri_auto_capture     = Column(Boolean, default=False)
     updated_at            = Column(DateTime, default=_now, onupdate=_now)
 
 
