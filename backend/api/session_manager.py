@@ -183,6 +183,15 @@ def _run_session_sync(session_id: int, kwargs: dict, stop_event: threading.Event
         naukri_cookie           = getattr(db_cfg, "naukri_cookie", "") or ""
         naukri_nkparam          = getattr(db_cfg, "naukri_nkparam", "") or ""
 
+        # API mode can only SEARCH (the Naukri API has no apply endpoint). When
+        # the run also applies, drive the whole flow with Selenium instead — this
+        # also avoids the reCAPTCHA token-capture path entirely.
+        run_mode = kwargs.get("mode", db_sess.mode)
+        if naukri_search_mode == "api" and run_mode != "search":
+            logger.info("Session %s: mode=%s requires applying — forcing Selenium "
+                        "(API mode is search-only)", session_id, run_mode)
+            naukri_search_mode = "selenium"
+
         cfg = Config(
             naukri_userid       = db_cfg.naukri_email,
             naukri_password     = db_cfg.naukri_password,
