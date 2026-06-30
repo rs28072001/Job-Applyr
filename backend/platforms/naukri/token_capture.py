@@ -61,7 +61,18 @@ def capture_tokens(
     search_url = build_search_page_url(keyword, location, experience)
     logger.info("Token capture: navigating to %s", search_url)
 
-    driver = get_capture_driver(user_data_dir)
+    try:
+        driver = get_capture_driver(user_data_dir)
+    except Exception as chrome_err:
+        raise TokenCaptureError(
+            f"Failed to launch Chrome for token capture: {chrome_err}. "
+            "This usually means:\n"
+            "1. Chrome/Chromium is not installed\n"
+            "2. Chrome already crashed and still has locks\n"
+            "3. System is out of memory or file descriptors\n"
+            "Workaround: Manually paste Naukri cookie + nkparam in Settings > Naukri API"
+        ) from chrome_err
+
     try:
         driver.get(search_url)
 

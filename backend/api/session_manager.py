@@ -458,8 +458,10 @@ def _run_platform_db(
                 # Retry the search
                 listings = platform.search_jobs(keywords, location, max_fetch)
             except Exception as retry_err:
-                logger.error("Auto-capture failed: %s", retry_err)
-                log_event(db, session_id, "search_failed", {"platform": platform_name, "error": str(e)})
+                logger.error("Auto-capture failed (Chrome issue): %s\nFallback: Please manually update Naukri credentials in settings. Visit https://www.naukri.com, open DevTools → Network tab, refresh the page, find a search XHR request, copy the Cookie and nkparam headers, and paste them in settings.", retry_err)
+                msg = f"Naukri tokens expired and auto-refresh failed (Chrome error). Please manually update the cookie + nkparam in Settings → Naukri API. Instructions: Visit naukri.com, open DevTools, copy the Cookie and nkparam from any search request, then paste in settings."
+                log_event(db, session_id, "naukri_auto_capture_failed", {"error": str(retry_err), "recovery_instructions": msg})
+                tracker._emit({"type": "warning", "msg": msg})
                 return
         else:
             log_event(db, session_id, "search_failed", {"platform": platform_name, "error": str(e)})
