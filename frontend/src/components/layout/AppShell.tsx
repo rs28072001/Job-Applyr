@@ -34,9 +34,9 @@ export default function AppShell() {
   const isRunning = useSessionStore((s) => s.isRunning);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50">
       {/* ── Sidebar ── */}
-      <aside className="w-52 shrink-0 bg-white flex flex-col border-r border-slate-200">
+      <aside className="w-52 shrink-0 bg-white flex flex-col border-r border-slate-200 h-screen overflow-y-auto">
         <div className="px-4 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
