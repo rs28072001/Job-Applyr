@@ -49,6 +49,10 @@ backend/data/*.db
 backend/data/cv/
 backend/data/evidence/
 
+# Node / Electron
+node_modules/
+electron/release/
+
 # Temporary files
 *.tmp
 *.temp

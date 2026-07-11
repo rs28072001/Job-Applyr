@@ -1,9 +1,14 @@
 """FastAPI application factory."""
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import api.event_queue as eq
 from api.database import init_db
@@ -50,7 +55,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from api.routes import auth, config, cv, session, history, review, reports, ignored_jobs, ws, system, naukri
+    from api.routes import auth, config, cv, session, history, review, reports, ignored_jobs, ws, system, naukri, interview
     app.include_router(auth.router)
     app.include_router(config.router)
     app.include_router(cv.router)
@@ -62,12 +67,54 @@ def create_app() -> FastAPI:
     app.include_router(ws.router)
     app.include_router(system.router)
     app.include_router(naukri.router)
+    app.include_router(interview.router)
 
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
 
+    _mount_frontend(app)
+
     return app
+
+
+class _SPAStaticFiles(StaticFiles):
+    """Static file server with SPA fallback — unknown paths return index.html
+    so client-side routes (e.g. /dashboard) survive a page refresh."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+        if response.status_code == 404:
+            response = await super().get_response("index.html", scope)
+        return response
+
+
+def _frontend_dist_dir() -> Path | None:
+    """Locate the built frontend (frontend/dist)."""
+    env_dir = os.getenv("FRONTEND_DIST", "").strip()
+    if env_dir:
+        p = Path(env_dir)
+        return p if p.is_dir() else None
+    # PyInstaller bundle: dist ships next to the executable under _internal
+    if getattr(sys, "frozen", False):
+        bundled = Path(getattr(sys, "_MEIPASS", "")) / "frontend_dist"
+        if bundled.is_dir():
+            return bundled
+    # Dev checkout: <repo>/frontend/dist
+    local = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    return local if local.is_dir() else None
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    dist = _frontend_dist_dir()
+    if dist and (dist / "index.html").is_file():
+        app.mount("/", _SPAStaticFiles(directory=str(dist), html=True), name="frontend")
+        logger.info("Serving frontend from %s", dist)
 
 
 app = create_app()

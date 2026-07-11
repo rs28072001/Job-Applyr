@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { User, Mail, Phone, Briefcase, Award, GraduationCap, FileText, Upload, CheckCircle2, AlertCircle, Loader2, Target, Lightbulb, TrendingUp } from "lucide-react";
+import { User, Briefcase, Award, GraduationCap, FileText, Upload, CheckCircle2, AlertCircle, Loader2, Target } from "lucide-react";
 import { api } from "../api/client";
 import type { CVProfile, AppConfig } from "../api/types";
 import { Card } from "../components/ui";

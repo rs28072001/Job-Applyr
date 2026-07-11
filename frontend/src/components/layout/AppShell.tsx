@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Ban, Briefcase, LayoutDashboard, History, Inbox, FileText } from "lucide-react";
+import { Ban, Briefcase, LayoutDashboard, History, Inbox, FileText, Mic } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useSessionStore } from "../../store/sessionStore";
 import ThemeToggle from "../ThemeToggle";
@@ -7,6 +7,7 @@ import ThemeToggle from "../ThemeToggle";
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/resume", label: "Resume", icon: FileText },
+  { to: "/mock-interview", label: "AI Mock Interview", icon: Mic },
   { to: "/review", label: "Saved & Skipped", icon: Inbox },
   { to: "/ignored", label: "Ignored Jobs", icon: Ban },
   { to: "/history", label: "History", icon: History },

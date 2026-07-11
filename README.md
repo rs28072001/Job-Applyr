@@ -17,6 +17,20 @@ An automated job application assistant that searches and applies to jobs on Nauk
 - **Google Chrome** (for browser automation)
 - **Azure OpenAI API Key** (for AI-powered job matching)
 
+## Desktop App (Recommended for end users)
+
+Build an installable desktop application (Electron) with one command:
+
+```bash
+./build_desktop.sh
+```
+
+Installers are written to `electron/release/` (DMG/ZIP on macOS; run the build
+on Windows/Linux for NSIS/AppImage). The app bundles the backend and frontend —
+users just install it and launch; no Python or Node required on their machine
+(Google Chrome is still needed for the Selenium automation). See
+[electron/README.md](electron/README.md) for details.
+
 ## Quick Start
 
 1. **Clone the repository**

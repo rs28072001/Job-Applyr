@@ -9,6 +9,7 @@ import IgnoredJobsPage from "./pages/IgnoredJobsPage";
 import JobPreferencesPage from "./pages/JobPreferencesPage";
 import ResumePage from "./pages/ResumePage";
 import ProfilePage from "./pages/ProfilePage";
+import MockInterviewPage from "./pages/MockInterviewPage";
 
 class PageErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="preferences" element={<PageErrorBoundary><JobPreferencesPage /></PageErrorBoundary>} />
           <Route path="resume" element={<PageErrorBoundary><ResumePage /></PageErrorBoundary>} />
           <Route path="profile" element={<PageErrorBoundary><ProfilePage /></PageErrorBoundary>} />
+          <Route path="mock-interview" element={<PageErrorBoundary><MockInterviewPage /></PageErrorBoundary>} />
           <Route path="review" element={<PageErrorBoundary><ReviewQueuePage /></PageErrorBoundary>} />
           <Route path="ignored" element={<PageErrorBoundary><IgnoredJobsPage /></PageErrorBoundary>} />
           <Route path="history" element={<PageErrorBoundary><HistoryPage /></PageErrorBoundary>} />

@@ -68,7 +68,10 @@ def load_config() -> Config:
         except ValueError:
             raise ConfigError(f"{key} must be an integer, got: {val!r}")
 
-    base_dir = Path(__file__).parent.parent
+    # Desktop app sets SJA_BASE_DIR to a writable per-user data directory;
+    # otherwise fall back to the backend checkout directory.
+    _env_base = os.getenv("SJA_BASE_DIR", "").strip()
+    base_dir = Path(_env_base) if _env_base else Path(__file__).parent.parent
 
     def resolve_path(key: str, default: str) -> str:
         raw = os.getenv(key, default).strip()

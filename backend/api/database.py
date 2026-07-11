@@ -5,10 +5,14 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./data/smart_job_assistant.db",
+# Desktop app sets SJA_BASE_DIR to a writable per-user data directory.
+_sja_base = os.getenv("SJA_BASE_DIR", "").strip()
+_default_db = (
+    f"sqlite:///{Path(_sja_base) / 'data' / 'smart_job_assistant.db'}"
+    if _sja_base
+    else "sqlite:///./data/smart_job_assistant.db"
 )
+DATABASE_URL = os.getenv("DATABASE_URL", _default_db)
 
 # Ensure the parent directory of the SQLite file exists before creating the engine
 _db_path = DATABASE_URL.replace("sqlite:///", "")

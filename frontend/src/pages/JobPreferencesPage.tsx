@@ -1,8 +1,33 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
+import {
+  CheckCircle2, Loader2, AlertCircle, ChevronDown, ChevronUp, Wand2,
+  MapPin, Sliders, Layers, ListChecks, Target, Sparkles,
+  Search, FolderCheck, Send, TrendingUp,
+} from "lucide-react";
 import { api } from "../api/client";
 import type { AppConfig, CVProfile } from "../api/types";
 import { Card, LocalOnlyNote } from "../components/ui";
+
+const ALL_PLATFORMS = [
+  { key: "naukri", label: "Naukri", supported: true },
+  { key: "linkedin", label: "LinkedIn", supported: true },
+  { key: "indeed", label: "Indeed", supported: false },
+  { key: "glassdoor", label: "Glassdoor", supported: false },
+  { key: "angellist", label: "AngelList", supported: false },
+  { key: "wellfound", label: "Wellfound", supported: false },
+  { key: "simplyhired", label: "SimplyHired", supported: false },
+  { key: "monster", label: "Monster", supported: false },
+  { key: "shine", label: "Shine", supported: false },
+  { key: "timesjobs", label: "TimesJobs", supported: false },
+  { key: "ziprecruiter", label: "ZipRecruiter", supported: false },
+] as const;
+
+const HOW_IT_WORKS = [
+  { icon: Sliders, title: "Set preferences", hint: "Tell us what roles, locations, and platforms to search." },
+  { icon: Search, title: "We search", hint: "We find matching jobs across your enabled platforms." },
+  { icon: Send, title: "Review & apply", hint: "Review matches and apply automatically where supported." },
+  { icon: TrendingUp, title: "Track progress", hint: "Track applications and get notified of updates." },
+];
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">{children}</label>;
@@ -297,8 +322,11 @@ export default function JobPreferencesPage() {
     );
   }
 
+  const enabledPlatformCount = (platforms.naukri.enabled ? 1 : 0) + (platforms.linkedin.enabled ? 1 : 0);
+  const keywordCount = keywordsText.split(",").map((s) => s.trim()).filter(Boolean).length;
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-4">
+    <div className="p-6 max-w-6xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -315,13 +343,60 @@ export default function JobPreferencesPage() {
         </button>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      <div className="lg:col-span-2 space-y-4">
+
       <Card className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800 mb-1">Platform Selection</h2>
-            <p className="text-xs text-slate-500">Enable platforms and configure credentials</p>
+            <h2 className="text-sm font-semibold text-slate-800 mb-1">Search Platforms</h2>
+            <p className="text-xs text-slate-500">Naukri and LinkedIn are live; the rest are coming soon</p>
           </div>
           <LocalOnlyNote />
+        </div>
+
+        {/* Platform tile grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {ALL_PLATFORMS.map(({ key, label, supported }) => {
+            const isEnabled = key === "naukri" ? platforms.naukri.enabled
+              : key === "linkedin" ? platforms.linkedin.enabled
+              : false;
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={!supported}
+                onClick={() => {
+                  if (key === "naukri") {
+                    const newEnabled = !platforms.naukri.enabled;
+                    const newPlatform: "naukri" | "linkedin" | "both" = newEnabled
+                      ? (platforms.linkedin.enabled ? "both" : "naukri")
+                      : (platforms.linkedin.enabled ? "linkedin" : "naukri");
+                    setPlatforms({ ...platforms, naukri: { ...platforms.naukri, enabled: newEnabled, expanded: newEnabled } });
+                    setPrefs({ ...prefs, platform: newPlatform });
+                  } else if (key === "linkedin") {
+                    const newEnabled = !platforms.linkedin.enabled;
+                    const newPlatform: "naukri" | "linkedin" | "both" = newEnabled
+                      ? (platforms.naukri.enabled ? "both" : "linkedin")
+                      : (platforms.naukri.enabled ? "naukri" : "linkedin");
+                    setPlatforms({ ...platforms, linkedin: { ...platforms.linkedin, enabled: newEnabled, expanded: newEnabled } });
+                    setPrefs({ ...prefs, platform: newPlatform });
+                  }
+                }}
+                title={supported ? label : `${label} — coming soon`}
+                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-colors
+                  ${isEnabled ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-white"}
+                  ${supported ? "hover:border-slate-300 cursor-pointer" : "opacity-50 cursor-not-allowed"}`}
+              >
+                <span className={`text-xs font-semibold truncate ${isEnabled ? "text-indigo-700" : "text-slate-600"}`}>{label}</span>
+                {!supported && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[9px] font-medium bg-slate-100 text-slate-400 border border-slate-200 px-1 py-px rounded">
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Platform Cards */}
@@ -691,6 +766,80 @@ export default function JobPreferencesPage() {
           {error}
         </div>
       )}
+
+      </div>
+
+      {/* ── Sidebar ── */}
+      <div className="space-y-4">
+        <Card className="p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <ListChecks className="w-4 h-4 text-indigo-500" />
+            Your Search Summary
+          </h2>
+          <dl className="space-y-2 text-sm">
+            {[
+              { icon: Layers, label: "Platforms", value: String(enabledPlatformCount) },
+              { icon: Target, label: "Job titles", value: String(keywordCount) },
+              { icon: MapPin, label: "Location", value: prefs.location || "—" },
+              { icon: Sliders, label: "Min. match score", value: `${prefs.confidence_threshold}%` },
+              { icon: Sparkles, label: "Mode", value: prefs.mode === "search_and_apply" ? "Search & Apply" : "Search only" },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex items-center justify-between">
+                <dt className="flex items-center gap-1.5 text-slate-500">
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </dt>
+                <dd className="font-medium text-slate-800 truncate max-w-[55%] text-right">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-800">Active Integrations</h2>
+          </div>
+          <div className="space-y-2">
+            {ALL_PLATFORMS.filter((p) => p.supported).map(({ key, label }) => {
+              const connected = key === "naukri" ? platforms.naukri.enabled : platforms.linkedin.enabled;
+              return (
+                <div key={key} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-700">{label}</span>
+                  <span className={`flex items-center gap-1.5 text-[11px] font-medium ${connected ? "text-emerald-600" : "text-slate-400"}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-slate-300"}`} />
+                    {connected ? "Connected" : "Not connected"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-400">
+            {ALL_PLATFORMS.length - 2} more platforms coming soon
+          </p>
+        </Card>
+      </div>
+      </div>
+
+      {/* ── How it works ── */}
+      <Card className="p-5">
+        <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-4">
+          <FolderCheck className="w-4 h-4 text-indigo-500" />
+          How it works
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {HOW_IT_WORKS.map(({ icon: Icon, title, hint }, i) => (
+            <div key={title} className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-800">{i + 1}. {title}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

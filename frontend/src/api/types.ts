@@ -67,6 +67,7 @@ export interface CVProfile {
   experience_years: number;
   education: string[];
   summary: string;
+  raw_text?: string;
   pdf_path: string;
   created_at: string;
   is_active: boolean;

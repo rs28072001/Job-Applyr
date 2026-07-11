@@ -239,3 +239,24 @@ class AuditEvent(Base):
     event_type  = Column(String, default="")   # session_started|status_change|backoff|stop|...
     detail      = Column(JSON,   default=dict)
     created_at  = Column(DateTime, default=_now)
+
+
+class InterviewSession(Base):
+    """One AI mock-interview run: questions, per-answer evaluations, final stats."""
+    __tablename__ = "interview_sessions"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    role             = Column(String,  default="")
+    interview_type   = Column(String,  default="technical")   # technical|hr|behavioral|system_design|custom
+    difficulty       = Column(String,  default="medium")      # easy|medium|hard
+    skills           = Column(JSON,    default=list)          # list[str]
+    language         = Column(String,  default="en-US")
+    duration_minutes = Column(Integer, default=30)
+    answer_mode      = Column(String,  default="voice")       # voice | text
+    questions        = Column(JSON,    default=list)          # list[str]
+    answers          = Column(JSON,    default=list)          # list[{question, answer, score, feedback, improvement}]
+    overall_score    = Column(Float,   nullable=True)
+    status           = Column(String,  default="in_progress") # in_progress|completed|terminated
+    termination_reason = Column(String, default="")
+    created_at       = Column(DateTime, default=_now)
+    completed_at     = Column(DateTime, nullable=True)
