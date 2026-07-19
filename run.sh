@@ -141,6 +141,3 @@ echo -e "${GREEN}API Docs:  http://localhost:8001/docs${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop both servers${NC}"
 echo ""
-
-# Wait for any process to exit
-wait
